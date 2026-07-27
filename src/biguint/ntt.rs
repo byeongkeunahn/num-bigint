@@ -137,7 +137,6 @@ struct NttPlan {
     pub n: usize,   // n == g*m
     pub g: usize,   // g: size of the base case
     pub m: usize,   // m divides Arith::<P>::MAX_NTT_LEN
-    pub cost: usize,
     pub last_radix: usize,
     pub s_list: Vec<(usize, usize)>,
 }
@@ -206,29 +205,25 @@ impl NttPlan {
             n: len_max,
             g,
             m: len_max / g,
-            cost: len_max_cost,
             last_radix: s_list.last().unwrap_or(&(1, 1)).1,
             s_list,
         }
     }
 }
-fn conv_base<const P: u64>(n: usize, x: *mut u64, y: *mut u64, c: u64) {
-    unsafe {
-        let c2 = Arith::<P>::mreducelo(c);
-        let out = x.sub(n);
-        for i in 0..n {
-            let mut v: u128 = 0;
-            for j in i+1..n {
-                let (w, overflow) = v.overflowing_sub(*x.add(j) as u128 * *y.add(i+n-j) as u128);
-                v = if overflow { w.wrapping_add((P as u128) << 64) } else { w };
-            }
-            v = Arith::<P>::mmulmod_noreduce(v, c, c2);
-            for j in 0..=i {
-                let (w, overflow) = v.overflowing_sub(*x.add(j) as u128 * *y.add(i-j) as u128);
-                v = if overflow { w.wrapping_add((P as u128) << 64) } else { w };
-            }
-            *out.add(i) = Arith::<P>::mreduce(v);
+fn conv_base<const P: u64>(n: usize, x: &mut [u64], y: &mut [u64], c: u64) {
+    let c2 = Arith::<P>::mreducelo(c);
+    for i in 0..n {
+        let mut v: u128 = 0;
+        for j in i+1..n {
+            let (w, overflow) = v.overflowing_sub(x[n+j] as u128 * y[i+n-j] as u128);
+            v = if overflow { w.wrapping_add((P as u128) << 64) } else { w };
         }
+        v = Arith::<P>::mmulmod_noreduce(v, c, c2);
+        for j in 0..=i {
+            let (w, overflow) = v.overflowing_sub(x[n+j] as u128 * y[i-j] as u128);
+            v = if overflow { w.wrapping_add((P as u128) << 64) } else { w };
+        }
+        x[i] = Arith::<P>::mreduce(v);
     }
 }
 
@@ -511,11 +506,11 @@ fn conv<const P: u64>(plan: &NttPlan, x: &mut [u64], xlen: usize, y: &mut [u64],
     ntt_dif_dit::<P, false>(plan, &mut y[g..], &tf_list);
 
     /* naive multiplication */
-    let (mut i, mut ii, mut ii_mod_last_radix) = (g, tf_last_start, 0);
+    let (mut i, mut ii, mut ii_mod_last_radix) = (0, tf_last_start, 0);
     let mut tf_current = Arith::<P>::R;
     let tf_mult = Arith::<P>::mpowmod(NttKernelImpl::<P, false>::ROOTR, Arith::<P>::MAX_NTT_LEN/last_radix);
-    while i < g + plan.n {
-        conv_base::<P>(g, (&mut x[i..]).as_mut_ptr(), (&mut y[i..]).as_mut_ptr(), tf_current);
+    while i < plan.n {
+        conv_base::<P>(g, &mut x[i..i+2*g], &mut y[i+g..i+2*g], tf_current);
         i += g;
         ii_mod_last_radix += 1;
         if ii_mod_last_radix == last_radix {
@@ -537,7 +532,7 @@ fn conv<const P: u64>(plan: &NttPlan, x: &mut [u64], xlen: usize, y: &mut [u64],
 
 ////////////////////////////////////////////////////////////////////////////////
 
-use core::cmp::{min, max};
+use core::cmp::max;
 use crate::big_digit::BigDigit;
 
 const P1: u64 = 14_259_017_916_245_606_401; // Max NTT length = 2^22 * 3^21 * 5^2 = 1_096_847_532_018_892_800
