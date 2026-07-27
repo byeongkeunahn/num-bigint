@@ -11,6 +11,8 @@ use core::iter::Product;
 use core::ops::{Mul, MulAssign};
 use num_traits::{CheckedMul, FromPrimitive, Zero};
 
+use super::ntt;
+
 #[inline]
 pub(super) fn mac_with_carry(
     a: BigDigit,
@@ -90,11 +92,11 @@ fn mac3(mut acc: &mut [BigDigit], mut b: &[BigDigit], mut c: &[BigDigit]) {
     // We use four algorithms for different input sizes.
     //
     // - For small inputs, long multiplication is fastest.
-    // - If y is at least least twice as long as x, split using Half-Karatsuba.
     // - Next we use Karatsuba multiplication (Toom-2), which we have optimized
     //   to avoid unnecessary allocations for intermediate values.
-    // - For the largest inputs we use Toom-3, which better optimizes the
+    // - Next we use Toom-3, which better optimizes the
     //   number of operations, but uses more temporary allocations.
+    // - For the largest inputs we use number-theoretic transform (NTT).
     //
     // The thresholds are somewhat arbitrary, chosen by evaluating the results
     // of `cargo bench --bench bigint multiply`.
@@ -278,7 +280,7 @@ fn mac3(mut acc: &mut [BigDigit], mut b: &[BigDigit], mut c: &[BigDigit]) {
             }
             NoSign => (),
         }
-    } else {
+    } else if x.len() <= if cfg!(u64_digit) { 512 } else { 2048 } {
         // Toom-3 multiplication:
         //
         // Toom-3 is like Karatsuba above, but dividing the inputs into three parts.
@@ -407,6 +409,14 @@ fn mac3(mut acc: &mut [BigDigit], mut b: &[BigDigit], mut c: &[BigDigit]) {
                 NoSign => {}
             }
         }
+    } else {
+        // Number-theoretic transform (NTT) multiplication:
+        //
+        // NTT multiplies two integers by computing the convolution of the arrays
+        // modulo a prime. Since the result may exceed the prime, we use two or three
+        // distinct primes and combine the results using the Chinese Remainder
+        // Theroem (CRT).
+        ntt::mac3(acc, b, c);
     }
 }
 
