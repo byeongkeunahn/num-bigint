@@ -1,3 +1,4 @@
+#![forbid(unsafe_code)]
 #![allow(clippy::cast_sign_loss)]
 #![allow(clippy::cast_lossless)]
 #![allow(clippy::cast_possible_truncation)]
