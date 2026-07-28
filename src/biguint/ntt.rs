@@ -857,7 +857,7 @@ fn mac3_two_primes(acc: &mut [u64], b: &[u64], c: &[u64], bits: u64) {
     let mask = (1u64 << bits) - 1;
     let mut carry: u128 = 0;
     let (mut j, mut p) = (0usize, 0u64);
-    let mut s: u64 = 0;
+    let mut bitbuf: u64 = 0;
     let mut carry_acc: u64 = 0;
     for i in 0..min_len {
         /* extract the convolution result */
@@ -869,25 +869,25 @@ fn mac3_two_primes(acc: &mut [u64], b: &[u64], c: &[u64], bits: u64) {
         }
         carry = v >> bits;
 
-        /* write to s */
+        /* write to bitbuf */
         let out = (v as u64) & mask;
-        s |= out << p;
+        bitbuf |= out << p;
         p += bits;
         if p >= 64 {
-            /* flush s to the output buffer */
-            let (w, overflow1) = s.overflowing_add(carry_acc);
+            /* flush bitbuf to the output buffer */
+            let (w, overflow1) = bitbuf.overflowing_add(carry_acc);
             let (w, overflow2) = acc[j].overflowing_add(w);
             acc[j] = w;
             carry_acc = u64::from(overflow1 || overflow2);
 
             /* roll-over */
             (j, p) = (j + 1, p - 64);
-            s = out >> (bits - p);
+            bitbuf = out >> (bits - p);
         }
     }
-    // Process remaining carries. The addition carry_acc + s should not overflow
-    //   since s is underfilled and carry_acc is always 0 or 1.
-    propagate_carry(&mut acc[j..], carry_acc + s);
+    // Process remaining carries. The addition carry_acc + bitbuf should not overflow
+    //   since bitbuf is underfilled and carry_acc is always 0 or 1.
+    propagate_carry(&mut acc[j..], carry_acc + bitbuf);
 }
 
 fn mac3_three_primes(acc: &mut [u64], b: &[u64], c: &[u64]) {
