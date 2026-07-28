@@ -258,14 +258,13 @@ const fn ntt2_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
     let out1 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(w1, Arith::<P>::submod(a, b));
     (out0, out1)
 }
-unsafe fn ntt2_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(
-    s1: usize, mut px: *mut u64, w1: u64) -> *mut u64 {
+fn ntt2_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(
+    px: &mut [u64], w1: u64) {
     let w1 = if TWIDDLE { w1 } else { 0 };
-    for _ in 0..s1 {
-        (*px, *px.add(s1)) = ntt2_kernel::<P, INV, TWIDDLE>(w1, *px, *px.add(s1));
-        px = px.add(1);
+    let s1 = px.len() / 2;
+    for i in 0..s1 {
+        (px[i], px[i+s1]) = ntt2_kernel::<P, INV, TWIDDLE>(w1, px[i], px[i+s1]);
     }
-    px.add(s1)
 }
 const fn ntt3_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
     w1: u64, w2: u64,
@@ -280,16 +279,15 @@ const fn ntt3_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
     let out2 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(w2, Arith::<P>::submod(Arith::<P>::submod(a, b), kbmc));
     (out0, out1, out2)
 }
-unsafe fn ntt3_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(
-    s1: usize, mut px: *mut u64, w1: u64) -> *mut u64 {
+fn ntt3_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(
+    px: &mut [u64], w1: u64) {
     let w1 = if TWIDDLE { w1 } else { 0 };
     let w2 = Arith::<P>::mmulmod(w1, w1);
-    for _ in 0..s1 {
-        (*px, *px.add(s1), *px.add(2*s1)) =
-            ntt3_kernel::<P, INV, TWIDDLE>(w1, w2, *px, *px.add(s1), *px.add(2*s1));
-        px = px.add(1);
+    let s1 = px.len() / 3;
+    for i in 0..s1 {
+        (px[i], px[i+s1], px[i+2*s1]) =
+            ntt3_kernel::<P, INV, TWIDDLE>(w1, w2, px[i], px[i+s1], px[i+2*s1]);
     }
-    px.add(2*s1)
 }
 const fn ntt4_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
     w1: u64, w2: u64, w3: u64,
@@ -310,18 +308,17 @@ const fn ntt4_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
     let out3 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(w3, Arith::<P>::submod(amc, jbmd));
     (out0, out1, out2, out3)
 }
-unsafe fn ntt4_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(
-    s1: usize, mut px: *mut u64, w1: u64) -> *mut u64 {
+fn ntt4_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(
+    px: &mut [u64], w1: u64) {
     let w1 = if TWIDDLE { w1 } else { 0 };
     let w2 = Arith::<P>::mmulmod(w1, w1);
     let w3 = Arith::<P>::mmulmod(w1, w2);
-    for _ in 0..s1 {
-        (*px, *px.add(s1), *px.add(2*s1), *px.add(3*s1)) =
+    let s1 = px.len() / 4;
+    for i in 0..s1 {
+        (px[i], px[i+s1], px[i+2*s1], px[i+3*s1]) =
             ntt4_kernel::<P, INV, TWIDDLE>(w1, w2, w3,
-                *px, *px.add(s1), *px.add(2*s1), *px.add(3*s1));
-        px = px.add(1);
+                px[i], px[i+s1], px[i+2*s1], px[i+3*s1]);
     }
-    px.add(3*s1)
 }
 const fn ntt5_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
     w1: u64, w2: u64, w3: u64, w4: u64,
@@ -354,21 +351,18 @@ const fn ntt5_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
     let out4 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(w4, Arith::<P>::addmodopt_invtw::<INV, TWIDDLE>(s1, m5));
     (out0, out1, out2, out3, out4)
 }
-unsafe fn ntt5_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(
-    s1: usize, mut px: *mut u64, w1: u64) -> *mut u64 {
+fn ntt5_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(
+    px: &mut [u64], w1: u64) {
     let w1 = if TWIDDLE { w1 } else { 0 };
     let w2 = Arith::<P>::mmulmod(w1, w1);
     let w3 = Arith::<P>::mmulmod(w1, w2);
     let w4 = Arith::<P>::mmulmod(w2, w2);
-    for _ in 0..s1 {
-        (*px, *px.add(s1), *px.add(2*s1),
-        *px.add(3*s1), *px.add(4*s1)) =
+    let s1 = px.len() / 5;
+    for i in 0..s1 {
+        (px[i], px[i+s1], px[i+2*s1], px[i+3*s1], px[i+4*s1]) =
             ntt5_kernel::<P, INV, TWIDDLE>(w1, w2, w3, w4,
-                *px, *px.add(s1), *px.add(2*s1),
-                *px.add(3*s1), *px.add(4*s1));
-        px = px.add(1);
+                px[i], px[i+s1], px[i+2*s1], px[i+3*s1], px[i+4*s1]);
     }
-    px.add(4*s1)
 }
 const fn ntt6_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
     w1: u64, w2: u64, w3: u64, w4: u64, w5: u64,
@@ -393,22 +387,19 @@ const fn ntt6_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
     let out5 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(w5, Arith::<P>::submod(d, Arith::<P>::submod(lepf, e)));
     (out0, out1, out2, out3, out4, out5)
 }
-unsafe fn ntt6_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(
-    s1: usize, mut px: *mut u64, w1: u64) -> *mut u64 {
+fn ntt6_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(
+    px: &mut [u64], w1: u64) {
     let w1 = if TWIDDLE { w1 } else { 0 };
     let w2 = Arith::<P>::mmulmod(w1, w1);
     let w3 = Arith::<P>::mmulmod(w1, w2);
     let w4 = Arith::<P>::mmulmod(w2, w2);
     let w5 = Arith::<P>::mmulmod(w2, w3);
-    for _ in 0..s1 {
-        (*px, *px.add(s1), *px.add(2*s1),
-        *px.add(3*s1), *px.add(4*s1), *px.add(5*s1)) =
+    let s1 = px.len() / 6;
+    for i in 0..s1 {
+        (px[i], px[i+s1], px[i+2*s1], px[i+3*s1], px[i+4*s1], px[i+5*s1]) =
             ntt6_kernel::<P, INV, TWIDDLE>(w1, w2, w3, w4, w5,
-                *px, *px.add(s1), *px.add(2*s1),
-                *px.add(3*s1), *px.add(4*s1), *px.add(5*s1));
-        px = px.add(1);
+                px[i], px[i+s1], px[i+2*s1], px[i+3*s1], px[i+4*s1], px[i+5*s1]);
     }
-    px.add(5*s1)
 }
 
 fn ntt_dif_dit<const P: u64, const INV: bool>(plan: &NttPlan, x: &mut [u64], tf_list: &[u64]) {
@@ -417,53 +408,59 @@ fn ntt_dif_dit<const P: u64, const INV: bool>(plan: &NttPlan, x: &mut [u64], tf_
     let mut ptf = 0;
     for i in i_list {
         let (s, radix) = plan.s_list[i];
-        let s1 = s / radix;
-        unsafe {
-            let mut px = x.as_mut_ptr();
-            let px_end = px.add(plan.n);
-            match radix {
-                2 => {
-                    px = ntt2_single_block::<P, INV, false>(s1, px, 0);
+        let mut px = 0;
+        match radix {
+            2 => {
+                ntt2_single_block::<P, INV, false>(&mut x[px..px+s], 0);
+                px += s;
+                ptf += 1;
+                while px < plan.n {
+                    ntt2_single_block::<P, INV, true>(&mut x[px..px+s], tf_list[ptf]);
+                    px += s;
                     ptf += 1;
-                    while px < px_end {
-                        px = ntt2_single_block::<P, INV, true>(s1, px, tf_list[ptf]);
-                        ptf += 1;
-                    }
-                },
-                3 => {
-                    px = ntt3_single_block::<P, INV, false>(s1, px, 0);
+                }
+            },
+            3 => {
+                ntt3_single_block::<P, INV, false>(&mut x[px..px+s], 0);
+                px += s;
+                ptf += 1;
+                while px < plan.n {
+                    ntt3_single_block::<P, INV, true>(&mut x[px..px+s], tf_list[ptf]);
+                    px += s;
                     ptf += 1;
-                    while px < px_end {
-                        px = ntt3_single_block::<P, INV, true>(s1, px, tf_list[ptf]);
-                        ptf += 1;
-                    }
-                },
-                4 => {
-                    px = ntt4_single_block::<P, INV, false>(s1, px, 0);
+                }
+            },
+            4 => {
+                ntt4_single_block::<P, INV, false>(&mut x[px..px+s], 0);
+                px += s;
+                ptf += 1;
+                while px < plan.n {
+                    ntt4_single_block::<P, INV, true>(&mut x[px..px+s], tf_list[ptf]);
+                    px += s;
                     ptf += 1;
-                    while px < px_end {
-                        px = ntt4_single_block::<P, INV, true>(s1, px, tf_list[ptf]);
-                        ptf += 1;
-                    }
-                },
-                5 => {
-                    px = ntt5_single_block::<P, INV, false>(s1, px, 0);
+                }
+            },
+            5 => {
+                ntt5_single_block::<P, INV, false>(&mut x[px..px+s], 0);
+                px += s;
+                ptf += 1;
+                while px < plan.n {
+                    ntt5_single_block::<P, INV, true>(&mut x[px..px+s], tf_list[ptf]);
+                    px += s;
                     ptf += 1;
-                    while px < px_end {
-                        px = ntt5_single_block::<P, INV, true>(s1, px, tf_list[ptf]);
-                        ptf += 1;
-                    }
-                },
-                6 => {
-                    px = ntt6_single_block::<P, INV, false>(s1, px, 0);
+                }
+            },
+            6 => {
+                ntt6_single_block::<P, INV, false>(&mut x[px..px+s], 0);
+                px += s;
+                ptf += 1;
+                while px < plan.n {
+                    ntt6_single_block::<P, INV, true>(&mut x[px..px+s], tf_list[ptf]);
+                    px += s;
                     ptf += 1;
-                    while px < px_end {
-                        px = ntt6_single_block::<P, INV, true>(s1, px, tf_list[ptf]);
-                        ptf += 1;
-                    }
-                },
-                _ => { unreachable!() }
-            }
+                }
+            },
+            _ => { unreachable!() }
         }
     }
 }
