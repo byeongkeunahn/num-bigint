@@ -324,12 +324,16 @@ impl NttPlan {
         }
     }
 }
-fn conv_base<const P: u64>(n: usize, x: &mut [u64], y: &mut [u64], c: u64) {
+fn conv_base<const P: u64>(out: &mut [u64], x: &[u64], y: &[u64], c: u64) {
+    assert_eq!(out.len(), x.len());
+    assert_eq!(x.len(), y.len());
+
+    let n = out.len();
     let c2 = Arith::<P>::mreducelo(c);
     for i in 0..n {
         let mut v: u128 = 0;
         for j in i + 1..n {
-            let (w, overflow) = v.overflowing_sub(x[n + j] as u128 * y[i + n - j] as u128);
+            let (w, overflow) = v.overflowing_sub(x[j] as u128 * y[i + n - j] as u128);
             v = if overflow {
                 w.wrapping_add((P as u128) << 64)
             } else {
@@ -338,14 +342,14 @@ fn conv_base<const P: u64>(n: usize, x: &mut [u64], y: &mut [u64], c: u64) {
         }
         v = Arith::<P>::mmulmod_noreduce(v, c, c2);
         for j in 0..=i {
-            let (w, overflow) = v.overflowing_sub(x[n + j] as u128 * y[i - j] as u128);
+            let (w, overflow) = v.overflowing_sub(x[j] as u128 * y[i - j] as u128);
             v = if overflow {
                 w.wrapping_add((P as u128) << 64)
             } else {
                 w
             };
         }
-        x[i] = Arith::<P>::mreduce(v);
+        out[i] = Arith::<P>::mreduce(v);
     }
 }
 
@@ -730,12 +734,10 @@ fn conv<const P: u64>(
         Arith::<P>::MAX_NTT_LEN / last_radix,
     );
     while i < plan.n {
-        conv_base::<P>(
-            g,
-            &mut x[i..i + 2 * g],
-            &mut y[i + g..i + 2 * g],
-            tf_current,
-        );
+        // We accumulate the results just before `x_block` for cache friendliness.
+        let (out_block, x_block) = x[i..i + 2 * g].split_at_mut(g);
+        let y_block = &y[i + g..i + 2 * g];
+        conv_base::<P>(out_block, x_block, y_block, tf_current);
         i += g;
         ii_mod_last_radix += 1;
         if ii_mod_last_radix == last_radix {
