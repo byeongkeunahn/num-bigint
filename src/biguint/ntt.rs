@@ -600,6 +600,9 @@ fn ntt_dif_dit<const P: u64, const INV: bool>(plan: &NttPlan, x: &mut [u64], tf_
             step
         };
         let (s, radix) = plan.s_list[i];
+        debug_assert_eq!(plan.n % s, 0);
+        debug_assert_eq!(s % radix, 0);
+
         let mut x_iter = x[..plan.n].chunks_exact_mut(s);
         match radix {
             2 => {
