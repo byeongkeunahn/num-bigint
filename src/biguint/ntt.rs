@@ -596,8 +596,8 @@ fn ntt6_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(px: &mu
     }
 }
 
-fn ntt_dif_dit<const P: u64, const INV: bool>(plan: &NttPlan, x: &mut [u64], tf_list: &[u64]) {
-    let mut ptf = 0;
+fn ntt_dif_dit<const P: u64, const INV: bool>(plan: &NttPlan, x: &mut [u64], twiddles: &[u64]) {
+    let mut twiddle_index = 0;
     for step in 0..plan.s_list.len() {
         let i = if INV {
             plan.s_list.len() - 1 - step
@@ -612,42 +612,42 @@ fn ntt_dif_dit<const P: u64, const INV: bool>(plan: &NttPlan, x: &mut [u64], tf_
         match radix {
             2 => {
                 ntt2_single_block::<P, INV, false>(x_iter.next().unwrap(), 0);
-                ptf += 1;
+                twiddle_index += 1;
                 for px in x_iter {
-                    ntt2_single_block::<P, INV, true>(px, tf_list[ptf]);
-                    ptf += 1;
+                    ntt2_single_block::<P, INV, true>(px, twiddles[twiddle_index]);
+                    twiddle_index += 1;
                 }
             }
             3 => {
                 ntt3_single_block::<P, INV, false>(x_iter.next().unwrap(), 0);
-                ptf += 1;
+                twiddle_index += 1;
                 for px in x_iter {
-                    ntt3_single_block::<P, INV, true>(px, tf_list[ptf]);
-                    ptf += 1;
+                    ntt3_single_block::<P, INV, true>(px, twiddles[twiddle_index]);
+                    twiddle_index += 1;
                 }
             }
             4 => {
                 ntt4_single_block::<P, INV, false>(x_iter.next().unwrap(), 0);
-                ptf += 1;
+                twiddle_index += 1;
                 for px in x_iter {
-                    ntt4_single_block::<P, INV, true>(px, tf_list[ptf]);
-                    ptf += 1;
+                    ntt4_single_block::<P, INV, true>(px, twiddles[twiddle_index]);
+                    twiddle_index += 1;
                 }
             }
             5 => {
                 ntt5_single_block::<P, INV, false>(x_iter.next().unwrap(), 0);
-                ptf += 1;
+                twiddle_index += 1;
                 for px in x_iter {
-                    ntt5_single_block::<P, INV, true>(px, tf_list[ptf]);
-                    ptf += 1;
+                    ntt5_single_block::<P, INV, true>(px, twiddles[twiddle_index]);
+                    twiddle_index += 1;
                 }
             }
             6 => {
                 ntt6_single_block::<P, INV, false>(x_iter.next().unwrap(), 0);
-                ptf += 1;
+                twiddle_index += 1;
                 for px in x_iter {
-                    ntt6_single_block::<P, INV, true>(px, tf_list[ptf]);
-                    ptf += 1;
+                    ntt6_single_block::<P, INV, true>(px, twiddles[twiddle_index]);
+                    twiddle_index += 1;
                 }
             }
             _ => {
@@ -706,31 +706,34 @@ fn conv<const P: u64>(
     }
 
     /* compute the total space needed for twiddle factors */
-    let (mut radix_cumul, mut tf_all_count) = (1, 2); // 2 extra slots
+    let (mut radix_prefix_product, mut twiddle_count) = (1, 2); // 2 extra slots
     for &(_, radix) in &plan.s_list {
-        tf_all_count += radix_cumul;
-        radix_cumul *= radix;
+        twiddle_count += radix_prefix_product;
+        radix_prefix_product *= radix;
     }
 
     /* build twiddle factors */
-    let mut tf_list = vec![0u64; tf_all_count];
-    let mut tf_last_start = 0;
+    let mut twiddles = vec![0u64; twiddle_count];
+    let mut last_stage_twiddle_start = 0;
     for i in 0..plan.s_list.len() {
-        let x =
-            calc_twiddle_factors::<P, false>(&plan.s_list[0..=i], &mut tf_list[tf_last_start..]);
+        let stage_twiddle_count = calc_twiddle_factors::<P, false>(
+            &plan.s_list[0..=i],
+            &mut twiddles[last_stage_twiddle_start..],
+        );
         if i + 1 < plan.s_list.len() {
-            tf_last_start += x;
+            last_stage_twiddle_start += stage_twiddle_count;
         }
     }
 
     /* dif fft */
-    ntt_dif_dit::<P, false>(plan, &mut x[g..], &tf_list);
-    ntt_dif_dit::<P, false>(plan, &mut y[g..], &tf_list);
+    ntt_dif_dit::<P, false>(plan, &mut x[g..], &twiddles);
+    ntt_dif_dit::<P, false>(plan, &mut y[g..], &twiddles);
 
     /* naive multiplication */
-    let (mut i, mut ii, mut ii_mod_last_radix) = (0, tf_last_start, 0);
-    let mut tf_current = Arith::<P>::R;
-    let tf_mult = Arith::<P>::mpowmod(
+    let (mut i, mut last_stage_twiddle_index, mut position_in_last_radix) =
+        (0, last_stage_twiddle_start, 0);
+    let mut current_twiddle = Arith::<P>::R;
+    let twiddle_step = Arith::<P>::mpowmod(
         NttKernelImpl::<P, false>::ROOTR,
         Arith::<P>::MAX_NTT_LEN / last_radix,
     );
@@ -738,25 +741,25 @@ fn conv<const P: u64>(
         // We accumulate the results just before `x_block` for cache friendliness.
         let (out_block, x_block) = x[i..i + 2 * g].split_at_mut(g);
         let y_block = &y[i + g..i + 2 * g];
-        conv_base::<P>(out_block, x_block, y_block, tf_current);
+        conv_base::<P>(out_block, x_block, y_block, current_twiddle);
         i += g;
-        ii_mod_last_radix += 1;
-        if ii_mod_last_radix == last_radix {
-            ii += 1;
-            ii_mod_last_radix = 0;
-            tf_current = tf_list[ii];
+        position_in_last_radix += 1;
+        if position_in_last_radix == last_radix {
+            last_stage_twiddle_index += 1;
+            position_in_last_radix = 0;
+            current_twiddle = twiddles[last_stage_twiddle_index];
         } else {
-            tf_current = Arith::<P>::mmulmod(tf_current, tf_mult);
+            current_twiddle = Arith::<P>::mmulmod(current_twiddle, twiddle_step);
         }
     }
 
     /* dit fft */
-    let mut tf_last_start = 0;
+    let mut twiddle_offset = 0;
     for i in (0..plan.s_list.len()).rev() {
-        tf_last_start +=
-            calc_twiddle_factors::<P, true>(&plan.s_list[0..=i], &mut tf_list[tf_last_start..]);
+        twiddle_offset +=
+            calc_twiddle_factors::<P, true>(&plan.s_list[0..=i], &mut twiddles[twiddle_offset..]);
     }
-    ntt_dif_dit::<P, true>(plan, x, &tf_list);
+    ntt_dif_dit::<P, true>(plan, x, &twiddles);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
