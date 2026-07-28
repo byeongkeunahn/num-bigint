@@ -13,21 +13,34 @@ mod arith {
     //   (g, x, y) is a solution to ax + by = g, where g = gcd(a, b)
     const fn egcd(mut a: i128, mut b: i128) -> (i128, i128, i128) {
         assert!(a > 0 && b > 0);
-        let mut c = if a > b { (a, b) = (b, a); [0, 1, 1, 0] } else { [1, 0, 0, 1] }; // treat as a row-major 2x2 matrix
+        let mut c = if a > b {
+            (a, b) = (b, a);
+            [0, 1, 1, 0]
+        } else {
+            [1, 0, 0, 1]
+        }; // treat as a row-major 2x2 matrix
         loop {
-            if a == 0 { break (b, c[1], c[3]) }
-            let (q, r) = (b/a, b%a);
+            if a == 0 {
+                break (b, c[1], c[3]);
+            }
+            let (q, r) = (b / a, b % a);
             (a, b) = (r, a);
-            c = [c[1] - q*c[0], c[0], c[3] - q*c[2], c[2]];
+            c = [c[1] - q * c[0], c[0], c[3] - q * c[2], c[2]];
         }
     }
     // Modular inverse: a^-1 mod modulus
     //   (m == 0 means m == 2^64)
     pub const fn invmod(a: u64, modulus: u64) -> u64 {
-        let m = if modulus == 0 { 1i128 << 64 } else { modulus as i128 };
+        let m = if modulus == 0 {
+            1i128 << 64
+        } else {
+            modulus as i128
+        };
         let (g, mut x, _y) = egcd(a as i128, m);
         assert!(g == 1);
-        if x < 0 { x += m; }
+        if x < 0 {
+            x += m;
+        }
         assert!(x > 0 && x < 1i128 << 64);
         x as u64
     }
@@ -38,33 +51,42 @@ impl<const P: u64> Arith<P> {
     const R: u64 = ((1u128 << 64) % P as u128) as u64; // 2^64 mod P
     const R2: u64 = (Self::R as u128 * Self::R as u128 % P as u128) as u64; // R^2 mod P
     const PINV: u64 = arith::invmod(P, 0); // P^-1 mod 2^64
-    const MAX_NTT_LEN: u64 = 2u64.pow(Self::factors(2)) * 3u64.pow(Self::factors(3)) * 5u64.pow(Self::factors(5));
+    const MAX_NTT_LEN: u64 =
+        2u64.pow(Self::factors(2)) * 3u64.pow(Self::factors(3)) * 5u64.pow(Self::factors(5));
     const ROOTR: u64 = {
         // ROOT * R mod P (ROOT: MAX_NTT_LEN divides MultiplicativeOrder[ROOT, P])
         assert!(Self::MAX_NTT_LEN % 4050 == 0);
         let mut p = Self::R;
         loop {
-            if Self::mpowmod(p, P/2) != Self::R &&
-                Self::mpowmod(p, P/3) != Self::R &&
-                Self::mpowmod(p, P/5) != Self::R {
-                break Self::mpowmod(p, P/Self::MAX_NTT_LEN);
+            if Self::mpowmod(p, P / 2) != Self::R
+                && Self::mpowmod(p, P / 3) != Self::R
+                && Self::mpowmod(p, P / 5) != Self::R
+            {
+                break Self::mpowmod(p, P / Self::MAX_NTT_LEN);
             }
             p = Self::addmod(p, Self::R);
         }
     };
     // Counts the number of `divisor` factors in P-1.
     const fn factors(divisor: u64) -> u32 {
-        let (mut tmp, mut ans) = (P-1, 0);
-        while tmp % divisor == 0 { tmp /= divisor; ans += 1; }
+        let (mut tmp, mut ans) = (P - 1, 0);
+        while tmp % divisor == 0 {
+            tmp /= divisor;
+            ans += 1;
+        }
         ans
     }
     // Montgomery reduction:
     //   x * R^-1 mod P
     const fn mreduce(x: u128) -> u64 {
         let m = (x as u64).wrapping_mul(Self::PINV);
-        let y = (m as u128 * P as u128 >> 64) as u64;
+        let y = ((m as u128 * P as u128) >> 64) as u64;
         let (out, overflow) = ((x >> 64) as u64).overflowing_sub(y);
-        if overflow { out.wrapping_add(P) } else { out }
+        if overflow {
+            out.wrapping_add(P)
+        } else {
+            out
+        }
     }
     // Multiplication with Montgomery reduction:
     //   a * b * R^-1 mod P
@@ -76,7 +98,11 @@ impl<const P: u64> Arith<P> {
     // This function only applies the multiplication when INV && TWIDDLE,
     //   otherwise it just returns b.
     const fn mmulmod_invtw<const INV: bool, const TWIDDLE: bool>(a: u64, b: u64) -> u64 {
-        if INV && TWIDDLE { Self::mmulmod(a, b) } else { b }
+        if INV && TWIDDLE {
+            Self::mmulmod(a, b)
+        } else {
+            b
+        }
     }
     // Fused-multiply-sub with Montgomery reduction:
     //   a * b * R^-1 - c mod P
@@ -106,12 +132,16 @@ impl<const P: u64> Arith<P> {
         let a: u128 = c as u128 * (v >> 64);
         let b: u128 = d as u128 * (v as u64 as u128);
         let (w, overflow) = a.overflowing_sub(b);
-        if overflow { w.wrapping_add((P as u128) << 64) } else { w }
+        if overflow {
+            w.wrapping_add((P as u128) << 64)
+        } else {
+            w
+        }
     }
     // Computes submod(0, mreduce(x as u128)) fast.
     const fn mreducelo(x: u64) -> u64 {
         let m = x.wrapping_mul(Self::PINV);
-        (m as u128 * P as u128 >> 64) as u64
+        ((m as u128 * P as u128) >> 64) as u64
     }
     // Computes a + b mod P, output range [0, P)
     const fn addmod(a: u64, b: u64) -> u64 {
@@ -120,23 +150,35 @@ impl<const P: u64> Arith<P> {
     // Computes a + b mod P, output range [0, 2^64)
     const fn addmod64(a: u64, b: u64) -> u64 {
         let (out, overflow) = a.overflowing_add(b);
-        if overflow { out.wrapping_sub(P) } else { out }
+        if overflow {
+            out.wrapping_sub(P)
+        } else {
+            out
+        }
     }
     // Computes a + b mod P, selects addmod64 or addmod depending on INV && TWIDDLE
     const fn addmodopt_invtw<const INV: bool, const TWIDDLE: bool>(a: u64, b: u64) -> u64 {
-        if INV && TWIDDLE { Self::addmod64(a, b) } else { Self::addmod(a, b) }
+        if INV && TWIDDLE {
+            Self::addmod64(a, b)
+        } else {
+            Self::addmod(a, b)
+        }
     }
     // Computes a - b mod P, output range [0, P)
     const fn submod(a: u64, b: u64) -> u64 {
         let (out, overflow) = a.overflowing_sub(b);
-        if overflow { out.wrapping_add(P) } else { out }
+        if overflow {
+            out.wrapping_add(P)
+        } else {
+            out
+        }
     }
 }
 
 struct NttPlan {
-    pub n: usize,   // n == g*m
-    pub g: usize,   // g: size of the base case
-    pub m: usize,   // m divides Arith::<P>::MAX_NTT_LEN
+    pub n: usize, // n == g*m
+    pub g: usize, // g: size of the base case
+    pub m: usize, // m divides Arith::<P>::MAX_NTT_LEN
     pub last_radix: usize,
     pub s_list: Vec<(usize, usize)>,
 }
@@ -148,57 +190,113 @@ impl NttPlan {
             for m5 in 0..=Arith::<P>::factors(5) {
                 for m3 in 0..=Arith::<P>::factors(3) {
                     let len = 7u64.pow(m7) * 5u64.pow(m5) * 3u64.pow(m3);
-                    if len >= 2 * min_len as u64 { break; }
+                    if len >= 2 * min_len as u64 {
+                        break;
+                    }
                     let (mut len, mut m2) = (len as usize, 0);
-                    while len < min_len && m2 < Arith::<P>::factors(2) { len *= 2; m2 += 1; }
+                    while len < min_len && m2 < Arith::<P>::factors(2) {
+                        len *= 2;
+                        m2 += 1;
+                    }
                     if len >= min_len && len < len_max_cost {
                         let (mut tmp, mut cost) = (len, 0);
                         let mut g_new = 1;
                         if len % 7 == 0 {
-                            (g_new, tmp, cost) = (7, tmp/7, cost + len*115/100);
+                            (g_new, tmp, cost) = (7, tmp / 7, cost + len * 115 / 100);
                         } else if len % 5 == 0 {
-                            (g_new, tmp, cost) = (5, tmp/5, cost + len*89/100);
+                            (g_new, tmp, cost) = (5, tmp / 5, cost + len * 89 / 100);
                         } else if m3 >= m2 + 2 {
-                            (g_new, tmp, cost) = (9, tmp/9, cost + len*180/100);
+                            (g_new, tmp, cost) = (9, tmp / 9, cost + len * 180 / 100);
                         } else if m2 >= m3 + 3 && (m2 - m3) % 2 == 1 {
-                            (g_new, tmp, cost) = (8, tmp/8, cost + len*130/100);
+                            (g_new, tmp, cost) = (8, tmp / 8, cost + len * 130 / 100);
                         } else if m2 >= m3 + 2 && m3 == 0 {
-                            (g_new, tmp, cost) = (4, tmp/4, cost + len*87/100);
+                            (g_new, tmp, cost) = (4, tmp / 4, cost + len * 87 / 100);
                         } else if m2 == 0 && m3 >= 1 {
-                            (g_new, tmp, cost) = (3, tmp/3, cost + len*86/100);
+                            (g_new, tmp, cost) = (3, tmp / 3, cost + len * 86 / 100);
                         } else if m3 == 0 && m2 >= 1 {
-                            (g_new, tmp, cost) = (2, tmp/2, cost + len*86/100);
+                            (g_new, tmp, cost) = (2, tmp / 2, cost + len * 86 / 100);
                         } else if len % 6 == 0 {
-                            (g_new, tmp, cost) = (6, tmp/6, cost + len*91/100);
+                            (g_new, tmp, cost) = (6, tmp / 6, cost + len * 91 / 100);
                         }
                         let (mut b6, mut b2) = (false, false);
-                        while tmp % 6 == 0 { (tmp, cost) = (tmp/6, cost + len*106/100); b6 = true; }
-                        while tmp % 5 == 0 { (tmp, cost) = (tmp/5, cost + len*131/100); }
-                        while tmp % 4 == 0 { (tmp, cost) = (tmp/4, cost + len); }
-                        while tmp % 3 == 0 { (tmp, cost) = (tmp/3, cost + len); }
-                        while tmp % 2 == 0 { (tmp, cost) = (tmp/2, cost + len); b2 = true; }
-                        if b6 && b2 { cost -= len*6/100; }
-                        if cost < len_max_cost { (len_max, len_max_cost, g) = (len, cost, g_new); }
+                        while tmp % 6 == 0 {
+                            (tmp, cost) = (tmp / 6, cost + len * 106 / 100);
+                            b6 = true;
+                        }
+                        while tmp % 5 == 0 {
+                            (tmp, cost) = (tmp / 5, cost + len * 131 / 100);
+                        }
+                        while tmp % 4 == 0 {
+                            (tmp, cost) = (tmp / 4, cost + len);
+                        }
+                        while tmp % 3 == 0 {
+                            (tmp, cost) = (tmp / 3, cost + len);
+                        }
+                        while tmp % 2 == 0 {
+                            (tmp, cost) = (tmp / 2, cost + len);
+                            b2 = true;
+                        }
+                        if b6 && b2 {
+                            cost -= len * 6 / 100;
+                        }
+                        if cost < len_max_cost {
+                            (len_max, len_max_cost, g) = (len, cost, g_new);
+                        }
                     }
                 }
             }
         }
         let (mut cnt6, mut cnt5, mut cnt4, mut cnt3, mut cnt2) = (0, 0, 0, 0, 0);
         let mut tmp = len_max / g;
-        while tmp % 6 == 0 { tmp /= 6; cnt6 += 1; }
-        while tmp % 5 == 0 { tmp /= 5; cnt5 += 1; }
-        while tmp % 4 == 0 { tmp /= 4; cnt4 += 1; }
-        while tmp % 3 == 0 { tmp /= 3; cnt3 += 1; }
-        while tmp % 2 == 0 { tmp /= 2; cnt2 += 1; }
-        while cnt6 > 0 && cnt2 > 0 { cnt6 -= 1; cnt2 -= 1; cnt4 += 1; cnt3 += 1; }
+        while tmp % 6 == 0 {
+            tmp /= 6;
+            cnt6 += 1;
+        }
+        while tmp % 5 == 0 {
+            tmp /= 5;
+            cnt5 += 1;
+        }
+        while tmp % 4 == 0 {
+            tmp /= 4;
+            cnt4 += 1;
+        }
+        while tmp % 3 == 0 {
+            tmp /= 3;
+            cnt3 += 1;
+        }
+        while tmp % 2 == 0 {
+            tmp /= 2;
+            cnt2 += 1;
+        }
+        while cnt6 > 0 && cnt2 > 0 {
+            cnt6 -= 1;
+            cnt2 -= 1;
+            cnt4 += 1;
+            cnt3 += 1;
+        }
         let s_list = {
             let mut out = vec![];
             let mut tmp = len_max;
-            for _ in 0..cnt2 { out.push((tmp, 2)); tmp /= 2; }
-            for _ in 0..cnt3 { out.push((tmp, 3)); tmp /= 3; }
-            for _ in 0..cnt4 { out.push((tmp, 4)); tmp /= 4; }
-            for _ in 0..cnt5 { out.push((tmp, 5)); tmp /= 5; }
-            for _ in 0..cnt6 { out.push((tmp, 6)); tmp /= 6; }
+            for _ in 0..cnt2 {
+                out.push((tmp, 2));
+                tmp /= 2;
+            }
+            for _ in 0..cnt3 {
+                out.push((tmp, 3));
+                tmp /= 3;
+            }
+            for _ in 0..cnt4 {
+                out.push((tmp, 4));
+                tmp /= 4;
+            }
+            for _ in 0..cnt5 {
+                out.push((tmp, 5));
+                tmp /= 5;
+            }
+            for _ in 0..cnt6 {
+                out.push((tmp, 6));
+                tmp /= 6;
+            }
             out
         };
         Self {
@@ -214,14 +312,22 @@ fn conv_base<const P: u64>(n: usize, x: &mut [u64], y: &mut [u64], c: u64) {
     let c2 = Arith::<P>::mreducelo(c);
     for i in 0..n {
         let mut v: u128 = 0;
-        for j in i+1..n {
-            let (w, overflow) = v.overflowing_sub(x[n+j] as u128 * y[i+n-j] as u128);
-            v = if overflow { w.wrapping_add((P as u128) << 64) } else { w };
+        for j in i + 1..n {
+            let (w, overflow) = v.overflowing_sub(x[n + j] as u128 * y[i + n - j] as u128);
+            v = if overflow {
+                w.wrapping_add((P as u128) << 64)
+            } else {
+                w
+            };
         }
         v = Arith::<P>::mmulmod_noreduce(v, c, c2);
         for j in 0..=i {
-            let (w, overflow) = v.overflowing_sub(x[n+j] as u128 * y[i-j] as u128);
-            v = if overflow { w.wrapping_add((P as u128) << 64) } else { w };
+            let (w, overflow) = v.overflowing_sub(x[n + j] as u128 * y[i - j] as u128);
+            v = if overflow {
+                w.wrapping_add((P as u128) << 64)
+            } else {
+                w
+            };
         }
         x[i] = Arith::<P>::mreduce(v);
     }
@@ -229,16 +335,19 @@ fn conv_base<const P: u64>(n: usize, x: &mut [u64], y: &mut [u64], c: u64) {
 
 struct NttKernelImpl<const P: u64, const INV: bool>;
 impl<const P: u64, const INV: bool> NttKernelImpl<P, INV> {
-    const ROOTR: u64 = Arith::<P>::mpowmod(Arith::<P>::ROOTR, if INV { Arith::<P>::MAX_NTT_LEN - 1 } else { 1 });
-    const U3: u64 = Arith::<P>::mpowmod(Self::ROOTR, Arith::<P>::MAX_NTT_LEN/3);
-    const U4: u64 = Arith::<P>::mpowmod(Self::ROOTR, Arith::<P>::MAX_NTT_LEN/4);
-    const U5: u64 = Arith::<P>::mpowmod(Self::ROOTR, Arith::<P>::MAX_NTT_LEN/5);
-    const U6: u64 = Arith::<P>::mpowmod(Self::ROOTR, Arith::<P>::MAX_NTT_LEN/6);
+    const ROOTR: u64 = Arith::<P>::mpowmod(
+        Arith::<P>::ROOTR,
+        if INV { Arith::<P>::MAX_NTT_LEN - 1 } else { 1 },
+    );
+    const U3: u64 = Arith::<P>::mpowmod(Self::ROOTR, Arith::<P>::MAX_NTT_LEN / 3);
+    const U4: u64 = Arith::<P>::mpowmod(Self::ROOTR, Arith::<P>::MAX_NTT_LEN / 4);
+    const U5: u64 = Arith::<P>::mpowmod(Self::ROOTR, Arith::<P>::MAX_NTT_LEN / 5);
+    const U6: u64 = Arith::<P>::mpowmod(Self::ROOTR, Arith::<P>::MAX_NTT_LEN / 6);
     const C5: (u64, u64, u64, u64, u64, u64) = {
         let w = Self::U5;
         let w2 = Arith::<P>::mpowmod(w, 2);
         let w4 = Arith::<P>::mpowmod(w, 4);
-        let inv2 = Arith::<P>::mmulmod(Arith::<P>::R2, arith::invmod(2, P)); 
+        let inv2 = Arith::<P>::mmulmod(Arith::<P>::R2, arith::invmod(2, P));
         let inv4 = Arith::<P>::mmulmod(Arith::<P>::R2, arith::invmod(4, P));
         let c51 = Arith::<P>::addmod(Arith::<P>::R, inv4); // 1 + 4^-1 mod P
         let c52 = Arith::<P>::addmod(Arith::<P>::mmulmod(inv2, Arith::<P>::addmod(w, w4)), inv4); // 4^-1 * (2*w + 2*w^4 + 1) mod P
@@ -250,7 +359,9 @@ impl<const P: u64, const INV: bool> NttKernelImpl<P, INV> {
 }
 const fn ntt2_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
     w1: u64,
-    a: u64, mut b: u64) -> (u64, u64) {
+    a: u64,
+    mut b: u64,
+) -> (u64, u64) {
     if !INV && TWIDDLE {
         b = Arith::<P>::mmulmod(w1, b);
     }
@@ -258,40 +369,54 @@ const fn ntt2_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
     let out1 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(w1, Arith::<P>::submod(a, b));
     (out0, out1)
 }
-fn ntt2_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(
-    px: &mut [u64], w1: u64) {
+fn ntt2_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(px: &mut [u64], w1: u64) {
     let w1 = if TWIDDLE { w1 } else { 0 };
     let s1 = px.len() / 2;
     for i in 0..s1 {
-        (px[i], px[i+s1]) = ntt2_kernel::<P, INV, TWIDDLE>(w1, px[i], px[i+s1]);
+        (px[i], px[i + s1]) = ntt2_kernel::<P, INV, TWIDDLE>(w1, px[i], px[i + s1]);
     }
 }
 const fn ntt3_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
-    w1: u64, w2: u64,
-    a: u64, mut b: u64, mut c: u64) -> (u64, u64, u64) {
+    w1: u64,
+    w2: u64,
+    a: u64,
+    mut b: u64,
+    mut c: u64,
+) -> (u64, u64, u64) {
     if !INV && TWIDDLE {
         b = Arith::<P>::mmulmod(w1, b);
         c = Arith::<P>::mmulmod(w2, c);
     }
     let kbmc = Arith::<P>::mmulmod(NttKernelImpl::<P, INV>::U3, Arith::<P>::submod(b, c));
     let out0 = Arith::<P>::addmod(a, Arith::<P>::addmod(b, c));
-    let out1 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(w1, Arith::<P>::submod(a, Arith::<P>::submod(c, kbmc)));
-    let out2 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(w2, Arith::<P>::submod(Arith::<P>::submod(a, b), kbmc));
+    let out1 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(
+        w1,
+        Arith::<P>::submod(a, Arith::<P>::submod(c, kbmc)),
+    );
+    let out2 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(
+        w2,
+        Arith::<P>::submod(Arith::<P>::submod(a, b), kbmc),
+    );
     (out0, out1, out2)
 }
-fn ntt3_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(
-    px: &mut [u64], w1: u64) {
+fn ntt3_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(px: &mut [u64], w1: u64) {
     let w1 = if TWIDDLE { w1 } else { 0 };
     let w2 = Arith::<P>::mmulmod(w1, w1);
     let s1 = px.len() / 3;
     for i in 0..s1 {
-        (px[i], px[i+s1], px[i+2*s1]) =
-            ntt3_kernel::<P, INV, TWIDDLE>(w1, w2, px[i], px[i+s1], px[i+2*s1]);
+        (px[i], px[i + s1], px[i + 2 * s1]) =
+            ntt3_kernel::<P, INV, TWIDDLE>(w1, w2, px[i], px[i + s1], px[i + 2 * s1]);
     }
 }
 const fn ntt4_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
-    w1: u64, w2: u64, w3: u64,
-    a: u64, mut b: u64, mut c: u64, mut d: u64) -> (u64, u64, u64, u64) {
+    w1: u64,
+    w2: u64,
+    w3: u64,
+    a: u64,
+    mut b: u64,
+    mut c: u64,
+    mut d: u64,
+) -> (u64, u64, u64, u64) {
     if !INV && TWIDDLE {
         b = Arith::<P>::mmulmod(w1, b);
         c = Arith::<P>::mmulmod(w2, c);
@@ -303,26 +428,42 @@ const fn ntt4_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
     let bmd = Arith::<P>::submod(b, d);
     let jbmd = Arith::<P>::mmulmod(NttKernelImpl::<P, INV>::U4, bmd);
     let out0 = Arith::<P>::addmod(apc, bpd);
-    let out1 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(w1, Arith::<P>::addmodopt_invtw::<INV, TWIDDLE>(amc, jbmd));
+    let out1 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(
+        w1,
+        Arith::<P>::addmodopt_invtw::<INV, TWIDDLE>(amc, jbmd),
+    );
     let out2 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(w2, Arith::<P>::submod(apc, bpd));
     let out3 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(w3, Arith::<P>::submod(amc, jbmd));
     (out0, out1, out2, out3)
 }
-fn ntt4_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(
-    px: &mut [u64], w1: u64) {
+fn ntt4_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(px: &mut [u64], w1: u64) {
     let w1 = if TWIDDLE { w1 } else { 0 };
     let w2 = Arith::<P>::mmulmod(w1, w1);
     let w3 = Arith::<P>::mmulmod(w1, w2);
     let s1 = px.len() / 4;
     for i in 0..s1 {
-        (px[i], px[i+s1], px[i+2*s1], px[i+3*s1]) =
-            ntt4_kernel::<P, INV, TWIDDLE>(w1, w2, w3,
-                px[i], px[i+s1], px[i+2*s1], px[i+3*s1]);
+        (px[i], px[i + s1], px[i + 2 * s1], px[i + 3 * s1]) = ntt4_kernel::<P, INV, TWIDDLE>(
+            w1,
+            w2,
+            w3,
+            px[i],
+            px[i + s1],
+            px[i + 2 * s1],
+            px[i + 3 * s1],
+        );
     }
 }
 const fn ntt5_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
-    w1: u64, w2: u64, w3: u64, w4: u64,
-    a: u64, mut b: u64, mut c: u64, mut d: u64, mut e: u64) -> (u64, u64, u64, u64, u64) {
+    w1: u64,
+    w2: u64,
+    w3: u64,
+    w4: u64,
+    a: u64,
+    mut b: u64,
+    mut c: u64,
+    mut d: u64,
+    mut e: u64,
+) -> (u64, u64, u64, u64, u64) {
     if !INV && TWIDDLE {
         b = Arith::<P>::mmulmod(w1, b);
         c = Arith::<P>::mmulmod(w2, c);
@@ -346,27 +487,56 @@ const fn ntt5_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
     let s2 = Arith::<P>::addmod(m2, m3);
     let out0 = m1;
     let out1 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(w1, Arith::<P>::submod(s1, m5));
-    let out2 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(w2, Arith::<P>::submod(Arith::<P>::submod(0, s2), m6));
+    let out2 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(
+        w2,
+        Arith::<P>::submod(Arith::<P>::submod(0, s2), m6),
+    );
     let out3 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(w3, Arith::<P>::submod(m6, s2));
-    let out4 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(w4, Arith::<P>::addmodopt_invtw::<INV, TWIDDLE>(s1, m5));
+    let out4 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(
+        w4,
+        Arith::<P>::addmodopt_invtw::<INV, TWIDDLE>(s1, m5),
+    );
     (out0, out1, out2, out3, out4)
 }
-fn ntt5_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(
-    px: &mut [u64], w1: u64) {
+fn ntt5_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(px: &mut [u64], w1: u64) {
     let w1 = if TWIDDLE { w1 } else { 0 };
     let w2 = Arith::<P>::mmulmod(w1, w1);
     let w3 = Arith::<P>::mmulmod(w1, w2);
     let w4 = Arith::<P>::mmulmod(w2, w2);
     let s1 = px.len() / 5;
     for i in 0..s1 {
-        (px[i], px[i+s1], px[i+2*s1], px[i+3*s1], px[i+4*s1]) =
-            ntt5_kernel::<P, INV, TWIDDLE>(w1, w2, w3, w4,
-                px[i], px[i+s1], px[i+2*s1], px[i+3*s1], px[i+4*s1]);
+        (
+            px[i],
+            px[i + s1],
+            px[i + 2 * s1],
+            px[i + 3 * s1],
+            px[i + 4 * s1],
+        ) = ntt5_kernel::<P, INV, TWIDDLE>(
+            w1,
+            w2,
+            w3,
+            w4,
+            px[i],
+            px[i + s1],
+            px[i + 2 * s1],
+            px[i + 3 * s1],
+            px[i + 4 * s1],
+        );
     }
 }
 const fn ntt6_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
-    w1: u64, w2: u64, w3: u64, w4: u64, w5: u64,
-    mut a: u64, mut b: u64, mut c: u64, mut d: u64, mut e: u64, mut f: u64) -> (u64, u64, u64, u64, u64, u64) {
+    w1: u64,
+    w2: u64,
+    w3: u64,
+    w4: u64,
+    w5: u64,
+    mut a: u64,
+    mut b: u64,
+    mut c: u64,
+    mut d: u64,
+    mut e: u64,
+    mut f: u64,
+) -> (u64, u64, u64, u64, u64, u64) {
     if !INV && TWIDDLE {
         b = Arith::<P>::mmulmod(w1, b);
         c = Arith::<P>::mmulmod(w2, c);
@@ -379,16 +549,30 @@ const fn ntt6_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
     (c, f) = (Arith::<P>::addmod(c, f), Arith::<P>::submod(c, f));
     let lbmc = Arith::<P>::mmulmod(NttKernelImpl::<P, INV>::U6, Arith::<P>::submod(b, c));
     let out0 = Arith::<P>::addmod(a, Arith::<P>::addmod(b, c));
-    let out2 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(w2, Arith::<P>::submod(a, Arith::<P>::submod(b, lbmc)));
-    let out4 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(w4, Arith::<P>::submod(Arith::<P>::submod(a, c), lbmc));
+    let out2 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(
+        w2,
+        Arith::<P>::submod(a, Arith::<P>::submod(b, lbmc)),
+    );
+    let out4 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(
+        w4,
+        Arith::<P>::submod(Arith::<P>::submod(a, c), lbmc),
+    );
     let lepf = Arith::<P>::mmulmod(NttKernelImpl::<P, INV>::U6, Arith::<P>::addmod64(e, f));
-    let out1 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(w1, Arith::<P>::submod(d, Arith::<P>::submod(f, lepf)));
-    let out3 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(w3, Arith::<P>::submod(d, Arith::<P>::submod(e, f)));
-    let out5 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(w5, Arith::<P>::submod(d, Arith::<P>::submod(lepf, e)));
+    let out1 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(
+        w1,
+        Arith::<P>::submod(d, Arith::<P>::submod(f, lepf)),
+    );
+    let out3 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(
+        w3,
+        Arith::<P>::submod(d, Arith::<P>::submod(e, f)),
+    );
+    let out5 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(
+        w5,
+        Arith::<P>::submod(d, Arith::<P>::submod(lepf, e)),
+    );
     (out0, out1, out2, out3, out4, out5)
 }
-fn ntt6_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(
-    px: &mut [u64], w1: u64) {
+fn ntt6_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(px: &mut [u64], w1: u64) {
     let w1 = if TWIDDLE { w1 } else { 0 };
     let w2 = Arith::<P>::mmulmod(w1, w1);
     let w3 = Arith::<P>::mmulmod(w1, w2);
@@ -396,82 +580,109 @@ fn ntt6_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(
     let w5 = Arith::<P>::mmulmod(w2, w3);
     let s1 = px.len() / 6;
     for i in 0..s1 {
-        (px[i], px[i+s1], px[i+2*s1], px[i+3*s1], px[i+4*s1], px[i+5*s1]) =
-            ntt6_kernel::<P, INV, TWIDDLE>(w1, w2, w3, w4, w5,
-                px[i], px[i+s1], px[i+2*s1], px[i+3*s1], px[i+4*s1], px[i+5*s1]);
+        (
+            px[i],
+            px[i + s1],
+            px[i + 2 * s1],
+            px[i + 3 * s1],
+            px[i + 4 * s1],
+            px[i + 5 * s1],
+        ) = ntt6_kernel::<P, INV, TWIDDLE>(
+            w1,
+            w2,
+            w3,
+            w4,
+            w5,
+            px[i],
+            px[i + s1],
+            px[i + 2 * s1],
+            px[i + 3 * s1],
+            px[i + 4 * s1],
+            px[i + 5 * s1],
+        );
     }
 }
 
 fn ntt_dif_dit<const P: u64, const INV: bool>(plan: &NttPlan, x: &mut [u64], tf_list: &[u64]) {
     let mut i_list: Vec<_> = (0..plan.s_list.len()).collect();
-    if INV { i_list.reverse(); }
+    if INV {
+        i_list.reverse();
+    }
     let mut ptf = 0;
     for i in i_list {
         let (s, radix) = plan.s_list[i];
         let mut px = 0;
         match radix {
             2 => {
-                ntt2_single_block::<P, INV, false>(&mut x[px..px+s], 0);
+                ntt2_single_block::<P, INV, false>(&mut x[px..px + s], 0);
                 px += s;
                 ptf += 1;
                 while px < plan.n {
-                    ntt2_single_block::<P, INV, true>(&mut x[px..px+s], tf_list[ptf]);
+                    ntt2_single_block::<P, INV, true>(&mut x[px..px + s], tf_list[ptf]);
                     px += s;
                     ptf += 1;
                 }
-            },
+            }
             3 => {
-                ntt3_single_block::<P, INV, false>(&mut x[px..px+s], 0);
+                ntt3_single_block::<P, INV, false>(&mut x[px..px + s], 0);
                 px += s;
                 ptf += 1;
                 while px < plan.n {
-                    ntt3_single_block::<P, INV, true>(&mut x[px..px+s], tf_list[ptf]);
+                    ntt3_single_block::<P, INV, true>(&mut x[px..px + s], tf_list[ptf]);
                     px += s;
                     ptf += 1;
                 }
-            },
+            }
             4 => {
-                ntt4_single_block::<P, INV, false>(&mut x[px..px+s], 0);
+                ntt4_single_block::<P, INV, false>(&mut x[px..px + s], 0);
                 px += s;
                 ptf += 1;
                 while px < plan.n {
-                    ntt4_single_block::<P, INV, true>(&mut x[px..px+s], tf_list[ptf]);
+                    ntt4_single_block::<P, INV, true>(&mut x[px..px + s], tf_list[ptf]);
                     px += s;
                     ptf += 1;
                 }
-            },
+            }
             5 => {
-                ntt5_single_block::<P, INV, false>(&mut x[px..px+s], 0);
+                ntt5_single_block::<P, INV, false>(&mut x[px..px + s], 0);
                 px += s;
                 ptf += 1;
                 while px < plan.n {
-                    ntt5_single_block::<P, INV, true>(&mut x[px..px+s], tf_list[ptf]);
+                    ntt5_single_block::<P, INV, true>(&mut x[px..px + s], tf_list[ptf]);
                     px += s;
                     ptf += 1;
                 }
-            },
+            }
             6 => {
-                ntt6_single_block::<P, INV, false>(&mut x[px..px+s], 0);
+                ntt6_single_block::<P, INV, false>(&mut x[px..px + s], 0);
                 px += s;
                 ptf += 1;
                 while px < plan.n {
-                    ntt6_single_block::<P, INV, true>(&mut x[px..px+s], tf_list[ptf]);
+                    ntt6_single_block::<P, INV, true>(&mut x[px..px + s], tf_list[ptf]);
                     px += s;
                     ptf += 1;
                 }
-            },
-            _ => { unreachable!() }
+            }
+            _ => {
+                unreachable!()
+            }
         }
     }
 }
 
-fn calc_twiddle_factors<const P: u64, const INV: bool>(s_list: &[(usize, usize)], out: &mut [u64]) -> usize {
+fn calc_twiddle_factors<const P: u64, const INV: bool>(
+    s_list: &[(usize, usize)],
+    out: &mut [u64],
+) -> usize {
     let mut p = 1;
     out[0] = Arith::<P>::R;
     for i in (1..s_list.len()).rev() {
-        let radix = s_list[i-1].1;
-        let w = Arith::<P>::mpowmod(NttKernelImpl::<P, INV>::ROOTR, Arith::<P>::MAX_NTT_LEN/(p * radix * s_list.last().unwrap().1) as u64);
-        for j in p..radix*p {
+        let radix = s_list[i - 1].1;
+        let w = Arith::<P>::mpowmod(
+            NttKernelImpl::<P, INV>::ROOTR,
+            Arith::<P>::MAX_NTT_LEN / (p * radix * s_list.last().unwrap().1) as u64,
+        );
+        for j in p..radix * p {
             out[j] = Arith::<P>::mmulmod(w, out[j - p]);
         }
         p *= radix;
@@ -483,13 +694,27 @@ fn calc_twiddle_factors<const P: u64, const INV: bool>(s_list: &[(usize, usize)]
 // Modifies the input buffers in-place.
 // The output is saved in the slice `x`.
 // The input slices must have the same length.
-fn conv<const P: u64>(plan: &NttPlan, x: &mut [u64], xlen: usize, y: &mut [u64], ylen: usize, mut mult: u64) {
+fn conv<const P: u64>(
+    plan: &NttPlan,
+    x: &mut [u64],
+    xlen: usize,
+    y: &mut [u64],
+    ylen: usize,
+    mut mult: u64,
+) {
     assert!(!x.is_empty() && x.len() == y.len());
     let (_n, g, m, last_radix) = (plan.n, plan.g, plan.m, plan.last_radix as u64);
 
     /* multiply by a constant in advance */
-    mult = Arith::<P>::mmulmod(Arith::<P>::mpowmod(Arith::<P>::R2, 3), Arith::<P>::mmulmod(mult, (P-1)/m as u64));
-    for v in if xlen < ylen { &mut x[g..g+xlen] } else { &mut y[g..g+ylen] } {
+    mult = Arith::<P>::mmulmod(
+        Arith::<P>::mpowmod(Arith::<P>::R2, 3),
+        Arith::<P>::mmulmod(mult, (P - 1) / m as u64),
+    );
+    for v in if xlen < ylen {
+        &mut x[g..g + xlen]
+    } else {
+        &mut y[g..g + ylen]
+    } {
         *v = Arith::<P>::mmulmod(*v, mult);
     }
 
@@ -504,8 +729,11 @@ fn conv<const P: u64>(plan: &NttPlan, x: &mut [u64], xlen: usize, y: &mut [u64],
     let mut tf_list = vec![0u64; tf_all_count];
     let mut tf_last_start = 0;
     for i in 0..plan.s_list.len() {
-        let x = calc_twiddle_factors::<P, false>(&plan.s_list[0..=i], &mut tf_list[tf_last_start..]);
-        if i + 1 < plan.s_list.len() { tf_last_start += x; }
+        let x =
+            calc_twiddle_factors::<P, false>(&plan.s_list[0..=i], &mut tf_list[tf_last_start..]);
+        if i + 1 < plan.s_list.len() {
+            tf_last_start += x;
+        }
     }
 
     /* dif fft */
@@ -515,9 +743,17 @@ fn conv<const P: u64>(plan: &NttPlan, x: &mut [u64], xlen: usize, y: &mut [u64],
     /* naive multiplication */
     let (mut i, mut ii, mut ii_mod_last_radix) = (0, tf_last_start, 0);
     let mut tf_current = Arith::<P>::R;
-    let tf_mult = Arith::<P>::mpowmod(NttKernelImpl::<P, false>::ROOTR, Arith::<P>::MAX_NTT_LEN/last_radix);
+    let tf_mult = Arith::<P>::mpowmod(
+        NttKernelImpl::<P, false>::ROOTR,
+        Arith::<P>::MAX_NTT_LEN / last_radix,
+    );
     while i < plan.n {
-        conv_base::<P>(g, &mut x[i..i+2*g], &mut y[i+g..i+2*g], tf_current);
+        conv_base::<P>(
+            g,
+            &mut x[i..i + 2 * g],
+            &mut y[i + g..i + 2 * g],
+            tf_current,
+        );
         i += g;
         ii_mod_last_radix += 1;
         if ii_mod_last_radix == last_radix {
@@ -532,25 +768,29 @@ fn conv<const P: u64>(plan: &NttPlan, x: &mut [u64], xlen: usize, y: &mut [u64],
     /* dit fft */
     let mut tf_last_start = 0;
     for i in (0..plan.s_list.len()).rev() {
-        tf_last_start += calc_twiddle_factors::<P, true>(&plan.s_list[0..=i], &mut tf_list[tf_last_start..]);
+        tf_last_start +=
+            calc_twiddle_factors::<P, true>(&plan.s_list[0..=i], &mut tf_list[tf_last_start..]);
     }
     ntt_dif_dit::<P, true>(plan, x, &tf_list);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
-use core::cmp::max;
 use crate::big_digit::BigDigit;
+use core::cmp::max;
 
 const P1: u64 = 14_259_017_916_245_606_401; // Max NTT length = 2^22 * 3^21 * 5^2 = 1_096_847_532_018_892_800
 const P2: u64 = 17_984_575_660_032_000_001; // Max NTT length = 2^19 * 3^17 * 5^6 = 1_057_916_215_296_000_000
 const P3: u64 = 17_995_154_822_184_960_001; // Max NTT length = 2^17 * 3^22 * 5^4 = 2_570_736_403_169_280_000
 
 const P1INV_R_MOD_P2: u64 = Arith::<P2>::mmulmod(Arith::<P2>::R2, arith::invmod(P1, P2));
-const P1P2INV_R_MOD_P3: u64 = Arith::<P3>::mmulmod(Arith::<P3>::R2, arith::invmod((P1 as u128 * P2 as u128 % P3 as u128) as u64, P3));
+const P1P2INV_R_MOD_P3: u64 = Arith::<P3>::mmulmod(
+    Arith::<P3>::R2,
+    arith::invmod((P1 as u128 * P2 as u128 % P3 as u128) as u64, P3),
+);
 const P1_R_MOD_P3: u64 = Arith::<P3>::mmulmod(Arith::<P3>::R2, P1);
 const P1P2_LO: u64 = (P1 as u128 * P2 as u128) as u64;
-const P1P2_HI: u64 = (P1 as u128 * P2 as u128 >> 64) as u64;
+const P1P2_HI: u64 = ((P1 as u128 * P2 as u128) >> 64) as u64;
 
 // Propagates carry from the beginning to the end of acc,
 //   and returns the resulting carry if it is nonzero.
@@ -558,7 +798,9 @@ fn propagate_carry(acc: &mut [u64], mut carry: u64) -> u64 {
     for x in acc {
         let (v, overflow) = x.overflowing_add(carry);
         (*x, carry) = (v, u64::from(overflow));
-        if !overflow { break; }
+        if !overflow {
+            break;
+        }
     }
     carry
 }
@@ -576,9 +818,15 @@ fn mac3_two_primes(acc: &mut [u64], b: &[u64], c: &[u64], bits: u64) {
                 x |= (v >> k) << p;
                 let q = 64 - k;
                 if p + q >= bits {
-                    unsafe { let out = x & mask; *pdst1 = out; *pdst2 = out; }
+                    unsafe {
+                        let out = x & mask;
+                        *pdst1 = out;
+                        *pdst2 = out;
+                    }
                     x = 0;
-                    unsafe { (pdst1, pdst2, k, p) = (pdst1.add(1), pdst2.add(1), k + bits - p, 0); }
+                    unsafe {
+                        (pdst1, pdst2, k, p) = (pdst1.add(1), pdst2.add(1), k + bits - p, 0);
+                    }
                 } else {
                     p += q;
                     break;
@@ -586,7 +834,11 @@ fn mac3_two_primes(acc: &mut [u64], b: &[u64], c: &[u64], bits: u64) {
             }
         }
         unsafe {
-            if p > 0 { let out = x & mask; *pdst1 = out; *pdst2 = out; }
+            if p > 0 {
+                let out = x & mask;
+                *pdst1 = out;
+                *pdst2 = out;
+            }
         }
     }
 
@@ -603,8 +855,22 @@ fn mac3_two_primes(acc: &mut [u64], b: &[u64], c: &[u64], bits: u64) {
     let mut s = vec![0u64; plan_y.g + plan_y.n];
     pack_into(b, &mut x[plan_x.g..], &mut y[plan_y.g..], bits);
     pack_into(c, &mut r[plan_x.g..], &mut s[plan_y.g..], bits);
-    conv::<P2>(&plan_x, &mut x, b_len, &mut r[..plan_x.g+plan_x.n], c_len, arith::invmod(P3, P2));
-    conv::<P3>(&plan_y, &mut y, b_len, &mut s[..plan_y.g+plan_y.n], c_len, Arith::<P3>::submod(0, arith::invmod(P2, P3)));
+    conv::<P2>(
+        &plan_x,
+        &mut x,
+        b_len,
+        &mut r[..plan_x.g + plan_x.n],
+        c_len,
+        arith::invmod(P3, P2),
+    );
+    conv::<P3>(
+        &plan_y,
+        &mut y,
+        b_len,
+        &mut s[..plan_y.g + plan_y.n],
+        c_len,
+        Arith::<P3>::submod(0, arith::invmod(P2, P3)),
+    );
 
     /* merge the results in {x, y} into r (process carry along the way) */
     let mask = (1u64 << bits) - 1;
@@ -615,8 +881,11 @@ fn mac3_two_primes(acc: &mut [u64], b: &[u64], c: &[u64], bits: u64) {
     for i in 0..min_len {
         /* extract the convolution result */
         let (a, b) = (x[i], y[i]);
-        let (mut v, overflow) = (a as u128 * P3 as u128 + carry).overflowing_sub(b as u128 * P2 as u128);
-        if overflow { v = v.wrapping_add(P2 as u128 * P3 as u128); }
+        let (mut v, overflow) =
+            (a as u128 * P3 as u128 + carry).overflowing_sub(b as u128 * P2 as u128);
+        if overflow {
+            v = v.wrapping_add(P2 as u128 * P3 as u128);
+        }
         carry = v >> bits;
 
         /* write to s */
@@ -651,21 +920,54 @@ fn mac3_three_primes(acc: &mut [u64], b: &[u64], c: &[u64]) {
     let mut r = vec![0u64; max(x.len(), max(y.len(), z.len()))];
 
     /* convolution with modulo P1 */
-    for i in 0..b.len() { x[plan_x.g + i] = if b[i] >= P1 { b[i] - P1 } else { b[i] }; }
-    for i in 0..c.len() { r[plan_x.g + i] = if c[i] >= P1 { c[i] - P1 } else { c[i] }; }
-    conv::<P1>(&plan_x, &mut x, b.len(), &mut r[..plan_x.g+plan_x.n], c.len(), 1);
+    for i in 0..b.len() {
+        x[plan_x.g + i] = if b[i] >= P1 { b[i] - P1 } else { b[i] };
+    }
+    for i in 0..c.len() {
+        r[plan_x.g + i] = if c[i] >= P1 { c[i] - P1 } else { c[i] };
+    }
+    conv::<P1>(
+        &plan_x,
+        &mut x,
+        b.len(),
+        &mut r[..plan_x.g + plan_x.n],
+        c.len(),
+        1,
+    );
 
     /* convolution with modulo P2 */
-    for i in 0..b.len() { y[plan_y.g + i] = if b[i] >= P2 { b[i] - P2 } else { b[i] }; }
-    for i in 0..c.len() { r[plan_y.g + i] = if c[i] >= P2 { c[i] - P2 } else { c[i] }; }
+    for i in 0..b.len() {
+        y[plan_y.g + i] = if b[i] >= P2 { b[i] - P2 } else { b[i] };
+    }
+    for i in 0..c.len() {
+        r[plan_y.g + i] = if c[i] >= P2 { c[i] - P2 } else { c[i] };
+    }
     (&mut r[plan_y.g..])[c.len()..plan_y.n].fill(0u64);
-    conv::<P2>(&plan_y, &mut y, b.len(), &mut r[..plan_y.g+plan_y.n], c.len(), 1);
+    conv::<P2>(
+        &plan_y,
+        &mut y,
+        b.len(),
+        &mut r[..plan_y.g + plan_y.n],
+        c.len(),
+        1,
+    );
 
     /* convolution with modulo P3 */
-    for i in 0..b.len() { z[plan_z.g + i] = if b[i] >= P3 { b[i] - P3 } else { b[i] }; }
-    for i in 0..c.len() { r[plan_z.g + i] = if c[i] >= P3 { c[i] - P3 } else { c[i] }; }
+    for i in 0..b.len() {
+        z[plan_z.g + i] = if b[i] >= P3 { b[i] - P3 } else { b[i] };
+    }
+    for i in 0..c.len() {
+        r[plan_z.g + i] = if c[i] >= P3 { c[i] - P3 } else { c[i] };
+    }
     (&mut r[plan_z.g..])[c.len()..plan_z.n].fill(0u64);
-    conv::<P3>(&plan_z, &mut z, b.len(), &mut r[..plan_z.g+plan_z.n], c.len(), 1);
+    conv::<P3>(
+        &plan_z,
+        &mut z,
+        b.len(),
+        &mut r[..plan_z.g + plan_z.n],
+        c.len(),
+        1,
+    );
 
     /* merge the results in {x, y, z} into acc (process carry along the way) */
     let mut carry: u128 = 0;
@@ -694,8 +996,9 @@ fn mac3_three_primes(acc: &mut [u64], b: &[u64], c: &[u64]) {
         let vcmv = Arith::<P3>::mmulmod(cmv, P1P2INV_R_MOD_P3);
         let (out_01, overflow) = carry.overflowing_add(v + P1P2_LO as u128 * vcmv as u128);
         let out_0 = out_01 as u64;
-        let out_12 = P1P2_HI as u128 * vcmv as u128 + (out_01 >> 64) +
-            if overflow { 1u128 << 64 } else { 0 };
+        let out_12 = P1P2_HI as u128 * vcmv as u128
+            + (out_01 >> 64)
+            + if overflow { 1u128 << 64 } else { 0 };
 
         let (v, overflow) = acc[i].overflowing_add(out_0);
         acc[i] = v;
@@ -712,9 +1015,14 @@ fn mac3_u64(acc: &mut [u64], b: &[u64], c: &[u64]) {
             let mid = (lo + hi + 1) / 2;
             let single_digit_max_val = (1u64 << mid) - 1;
             let l_corrected = (total_bits + mid - 1) / mid;
-            let (lhs, overflow) = (single_digit_max_val as u128).pow(2).overflowing_mul(l_corrected as u128);
-            if !overflow && lhs < P2 as u128 * P3 as u128 { lo = mid; }
-            else { hi = mid - 1; }
+            let (lhs, overflow) = (single_digit_max_val as u128)
+                .pow(2)
+                .overflowing_mul(l_corrected as u128);
+            if !overflow && lhs < P2 as u128 * P3 as u128 {
+                lo = mid;
+            } else {
+                hi = mid - 1;
+            }
         }
         lo
     }
@@ -740,14 +1048,14 @@ fn mac3_u64(acc: &mut [u64], b: &[u64], c: &[u64]) {
         mac3_two_primes(acc, b, c, bits);
     } else {
         /* can pack at most 21 effective bits per u64, which is worse than
-           64/3 = 21.3333.. effective bits per u64 achieved with three primes */
+        64/3 = 21.3333.. effective bits per u64 achieved with three primes */
         mac3_three_primes(acc, b, c);
     }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
-cfg_digit!{
+cfg_digit! {
     pub fn mac3(acc: &mut [BigDigit], b: &[BigDigit], c: &[BigDigit]) {
         fn bigdigit_to_u64(src: &[BigDigit], is_acc: bool) -> Vec<u64> {
             let mut out = vec![0u64; (src.len() + 1) / 2 + is_acc as usize];
