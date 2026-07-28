@@ -592,12 +592,13 @@ fn ntt6_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(px: &mu
 }
 
 fn ntt_dif_dit<const P: u64, const INV: bool>(plan: &NttPlan, x: &mut [u64], tf_list: &[u64]) {
-    let mut i_list: Vec<_> = (0..plan.s_list.len()).collect();
-    if INV {
-        i_list.reverse();
-    }
     let mut ptf = 0;
-    for i in i_list {
+    for step in 0..plan.s_list.len() {
+        let i = if INV {
+            plan.s_list.len() - 1 - step
+        } else {
+            step
+        };
         let (s, radix) = plan.s_list[i];
         let mut px = 0;
         match radix {
