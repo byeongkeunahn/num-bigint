@@ -388,8 +388,9 @@ const fn ntt2_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
 fn ntt2_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(px: &mut [u64], w1: u64) {
     let w1 = if TWIDDLE { w1 } else { 0 };
     let s1 = px.len() / 2;
-    for i in 0..s1 {
-        (px[i], px[i + s1]) = ntt2_kernel::<P, INV, TWIDDLE>(w1, px[i], px[i + s1]);
+    let (a, b) = px.split_at_mut(s1);
+    for (a, b) in a.iter_mut().zip(b) {
+        (*a, *b) = ntt2_kernel::<P, INV, TWIDDLE>(w1, *a, *b);
     }
 }
 const fn ntt3_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
@@ -419,9 +420,10 @@ fn ntt3_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(px: &mu
     let w1 = if TWIDDLE { w1 } else { 0 };
     let w2 = Arith::<P>::mmulmod(w1, w1);
     let s1 = px.len() / 3;
-    for i in 0..s1 {
-        (px[i], px[i + s1], px[i + 2 * s1]) =
-            ntt3_kernel::<P, INV, TWIDDLE>(w1, w2, px[i], px[i + s1], px[i + 2 * s1]);
+    let (a, rest) = px.split_at_mut(s1);
+    let (b, c) = rest.split_at_mut(s1);
+    for ((a, b), c) in a.iter_mut().zip(b).zip(c) {
+        (*a, *b, *c) = ntt3_kernel::<P, INV, TWIDDLE>(w1, w2, *a, *b, *c);
     }
 }
 const fn ntt4_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
@@ -457,16 +459,11 @@ fn ntt4_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(px: &mu
     let w2 = Arith::<P>::mmulmod(w1, w1);
     let w3 = Arith::<P>::mmulmod(w1, w2);
     let s1 = px.len() / 4;
-    for i in 0..s1 {
-        (px[i], px[i + s1], px[i + 2 * s1], px[i + 3 * s1]) = ntt4_kernel::<P, INV, TWIDDLE>(
-            w1,
-            w2,
-            w3,
-            px[i],
-            px[i + s1],
-            px[i + 2 * s1],
-            px[i + 3 * s1],
-        );
+    let (a, rest) = px.split_at_mut(s1);
+    let (b, rest) = rest.split_at_mut(s1);
+    let (c, d) = rest.split_at_mut(s1);
+    for (((a, b), c), d) in a.iter_mut().zip(b).zip(c).zip(d) {
+        (*a, *b, *c, *d) = ntt4_kernel::<P, INV, TWIDDLE>(w1, w2, w3, *a, *b, *c, *d);
     }
 }
 const fn ntt5_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
@@ -520,24 +517,12 @@ fn ntt5_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(px: &mu
     let w3 = Arith::<P>::mmulmod(w1, w2);
     let w4 = Arith::<P>::mmulmod(w2, w2);
     let s1 = px.len() / 5;
-    for i in 0..s1 {
-        (
-            px[i],
-            px[i + s1],
-            px[i + 2 * s1],
-            px[i + 3 * s1],
-            px[i + 4 * s1],
-        ) = ntt5_kernel::<P, INV, TWIDDLE>(
-            w1,
-            w2,
-            w3,
-            w4,
-            px[i],
-            px[i + s1],
-            px[i + 2 * s1],
-            px[i + 3 * s1],
-            px[i + 4 * s1],
-        );
+    let (a, rest) = px.split_at_mut(s1);
+    let (b, rest) = rest.split_at_mut(s1);
+    let (c, rest) = rest.split_at_mut(s1);
+    let (d, e) = rest.split_at_mut(s1);
+    for ((((a, b), c), d), e) in a.iter_mut().zip(b).zip(c).zip(d).zip(e) {
+        (*a, *b, *c, *d, *e) = ntt5_kernel::<P, INV, TWIDDLE>(w1, w2, w3, w4, *a, *b, *c, *d, *e);
     }
 }
 const fn ntt6_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
@@ -595,27 +580,14 @@ fn ntt6_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(px: &mu
     let w4 = Arith::<P>::mmulmod(w2, w2);
     let w5 = Arith::<P>::mmulmod(w2, w3);
     let s1 = px.len() / 6;
-    for i in 0..s1 {
-        (
-            px[i],
-            px[i + s1],
-            px[i + 2 * s1],
-            px[i + 3 * s1],
-            px[i + 4 * s1],
-            px[i + 5 * s1],
-        ) = ntt6_kernel::<P, INV, TWIDDLE>(
-            w1,
-            w2,
-            w3,
-            w4,
-            w5,
-            px[i],
-            px[i + s1],
-            px[i + 2 * s1],
-            px[i + 3 * s1],
-            px[i + 4 * s1],
-            px[i + 5 * s1],
-        );
+    let (a, rest) = px.split_at_mut(s1);
+    let (b, rest) = rest.split_at_mut(s1);
+    let (c, rest) = rest.split_at_mut(s1);
+    let (d, rest) = rest.split_at_mut(s1);
+    let (e, f) = rest.split_at_mut(s1);
+    for (((((a, b), c), d), e), f) in a.iter_mut().zip(b).zip(c).zip(d).zip(e).zip(f) {
+        (*a, *b, *c, *d, *e, *f) =
+            ntt6_kernel::<P, INV, TWIDDLE>(w1, w2, w3, w4, w5, *a, *b, *c, *d, *e, *f);
     }
 }
 
