@@ -796,8 +796,7 @@ fn propagate_carry(acc: &mut [u64], mut carry: u64) -> u64 {
 fn mac3_two_primes(acc: &mut [u64], b: &[u64], c: &[u64], bits: u64) {
     fn pack_into(src: &[u64], dst1: &mut [u64], dst2: &mut [u64], bits: u64) {
         let mut p = 0u64;
-        let mut pdst1 = dst1.as_mut_ptr();
-        let mut pdst2 = dst2.as_mut_ptr();
+        let mut dst = dst1.iter_mut().zip(dst2);
         let mut x = 0u64;
         let mask = (1u64 << bits) - 1;
         for v in src {
@@ -806,27 +805,24 @@ fn mac3_two_primes(acc: &mut [u64], b: &[u64], c: &[u64], bits: u64) {
                 x |= (v >> k) << p;
                 let q = 64 - k;
                 if p + q >= bits {
-                    unsafe {
-                        let out = x & mask;
-                        *pdst1 = out;
-                        *pdst2 = out;
-                    }
+                    let out = x & mask;
+                    let (pdst1, pdst2) = dst.next().unwrap();
+                    *pdst1 = out;
+                    *pdst2 = out;
                     x = 0;
-                    unsafe {
-                        (pdst1, pdst2, k, p) = (pdst1.add(1), pdst2.add(1), k + bits - p, 0);
-                    }
+                    k = k + bits - p;
+                    p = 0;
                 } else {
                     p += q;
                     break;
                 }
             }
         }
-        unsafe {
-            if p > 0 {
-                let out = x & mask;
-                *pdst1 = out;
-                *pdst2 = out;
-            }
+        if p > 0 {
+            let out = x & mask;
+            let (pdst1, pdst2) = dst.next().unwrap();
+            *pdst1 = out;
+            *pdst2 = out;
         }
     }
 
