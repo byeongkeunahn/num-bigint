@@ -30,7 +30,7 @@ mod arith {
     }
     // Modular inverse: a^-1 mod modulus
     //   (m == 0 means m == 2^64)
-    pub const fn invmod(a: u64, modulus: u64) -> u64 {
+    const fn invmod_inner(a: u64, modulus: u64) -> u64 {
         let m = if modulus == 0 {
             1i128 << 64
         } else {
@@ -44,13 +44,22 @@ mod arith {
         assert!(x > 0 && x < 1i128 << 64);
         x as u64
     }
+    // Modular inverse: a^-1 mod modulus (modulus != 0)
+    pub const fn invmod(a: u64, modulus: u64) -> u64 {
+        assert!(modulus != 0);
+        invmod_inner(a, modulus)
+    }
+    // Modular inverse: a^-1 mod 2^64
+    pub const fn invmod_2pow64(a: u64) -> u64 {
+        invmod_inner(a, 0)
+    }
 }
 
 struct Arith<const P: u64> {}
 impl<const P: u64> Arith<P> {
     const R: u64 = ((1u128 << 64) % P as u128) as u64; // 2^64 mod P
     const R2: u64 = (Self::R as u128 * Self::R as u128 % P as u128) as u64; // R^2 mod P
-    const PINV: u64 = arith::invmod(P, 0); // P^-1 mod 2^64
+    const PINV: u64 = arith::invmod_2pow64(P); // P^-1 mod 2^64
     const MAX_NTT_LEN: u64 =
         2u64.pow(Self::factors(2)) * 3u64.pow(Self::factors(3)) * 5u64.pow(Self::factors(5));
     const ROOTR: u64 = {
