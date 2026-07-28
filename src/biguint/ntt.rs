@@ -600,55 +600,45 @@ fn ntt_dif_dit<const P: u64, const INV: bool>(plan: &NttPlan, x: &mut [u64], tf_
             step
         };
         let (s, radix) = plan.s_list[i];
-        let mut px = 0;
+        let mut x_iter = x[..plan.n].chunks_exact_mut(s);
         match radix {
             2 => {
-                ntt2_single_block::<P, INV, false>(&mut x[px..px + s], 0);
-                px += s;
+                ntt2_single_block::<P, INV, false>(x_iter.next().unwrap(), 0);
                 ptf += 1;
-                while px < plan.n {
-                    ntt2_single_block::<P, INV, true>(&mut x[px..px + s], tf_list[ptf]);
-                    px += s;
+                for px in x_iter {
+                    ntt2_single_block::<P, INV, true>(px, tf_list[ptf]);
                     ptf += 1;
                 }
             }
             3 => {
-                ntt3_single_block::<P, INV, false>(&mut x[px..px + s], 0);
-                px += s;
+                ntt3_single_block::<P, INV, false>(x_iter.next().unwrap(), 0);
                 ptf += 1;
-                while px < plan.n {
-                    ntt3_single_block::<P, INV, true>(&mut x[px..px + s], tf_list[ptf]);
-                    px += s;
+                for px in x_iter {
+                    ntt3_single_block::<P, INV, true>(px, tf_list[ptf]);
                     ptf += 1;
                 }
             }
             4 => {
-                ntt4_single_block::<P, INV, false>(&mut x[px..px + s], 0);
-                px += s;
+                ntt4_single_block::<P, INV, false>(x_iter.next().unwrap(), 0);
                 ptf += 1;
-                while px < plan.n {
-                    ntt4_single_block::<P, INV, true>(&mut x[px..px + s], tf_list[ptf]);
-                    px += s;
+                for px in x_iter {
+                    ntt4_single_block::<P, INV, true>(px, tf_list[ptf]);
                     ptf += 1;
                 }
             }
             5 => {
-                ntt5_single_block::<P, INV, false>(&mut x[px..px + s], 0);
-                px += s;
+                ntt5_single_block::<P, INV, false>(x_iter.next().unwrap(), 0);
                 ptf += 1;
-                while px < plan.n {
-                    ntt5_single_block::<P, INV, true>(&mut x[px..px + s], tf_list[ptf]);
-                    px += s;
+                for px in x_iter {
+                    ntt5_single_block::<P, INV, true>(px, tf_list[ptf]);
                     ptf += 1;
                 }
             }
             6 => {
-                ntt6_single_block::<P, INV, false>(&mut x[px..px + s], 0);
-                px += s;
+                ntt6_single_block::<P, INV, false>(x_iter.next().unwrap(), 0);
                 ptf += 1;
-                while px < plan.n {
-                    ntt6_single_block::<P, INV, true>(&mut x[px..px + s], tf_list[ptf]);
-                    px += s;
+                for px in x_iter {
+                    ntt6_single_block::<P, INV, true>(px, tf_list[ptf]);
                     ptf += 1;
                 }
             }
