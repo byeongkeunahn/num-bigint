@@ -55,6 +55,13 @@ mod arith {
     }
 }
 
+// NTT-local fixed-width modular arithmetic.
+//
+// Although this uses Montgomery reduction, it intentionally does not use
+// `biguint::monty`: P is a compile-time u64 modulus and R is 2^64. The
+// subtractive reduction remains const-evaluable, handles primes close to
+// 2^64 without a 129-bit addition, and supports the fused and delayed
+// reductions required by the NTT kernels.
 struct Arith<const P: u64> {}
 impl<const P: u64> Arith<P> {
     const R: u64 = ((1u128 << 64) % P as u128) as u64; // 2^64 mod P
