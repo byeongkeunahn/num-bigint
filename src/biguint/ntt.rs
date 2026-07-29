@@ -235,13 +235,17 @@ impl NttPlan {
                         } else if len % 6 == 0 {
                             (g_new, tmp, cost) = (6, tmp / 6, cost + len * 91 / 100);
                         }
-                        let (mut b6, mut b2) = (false, false);
+                        let (mut cnt6, mut b2) = (0, false);
                         while tmp % 6 == 0 {
-                            (tmp, cost) = (tmp / 6, cost + len * 106 / 100);
-                            b6 = true;
+                            (tmp, cost) = (tmp / 6, cost + len * 115 / 100);
+                            cnt6 += 1;
                         }
+                        // Ramp radix-5's weight from 156 to 186 over lengths
+                        // 5 * 2^14 through 9 * 2^14.
+                        let radix5_weight =
+                            156 + 30 * len.saturating_sub(5 << 14).min(1 << 16) / (1 << 16);
                         while tmp % 5 == 0 {
-                            (tmp, cost) = (tmp / 5, cost + len * 131 / 100);
+                            (tmp, cost) = (tmp / 5, cost + len * radix5_weight / 100);
                         }
                         while tmp % 4 == 0 {
                             (tmp, cost) = (tmp / 4, cost + len);
@@ -253,8 +257,12 @@ impl NttPlan {
                             (tmp, cost) = (tmp / 2, cost + len);
                             b2 = true;
                         }
-                        if b6 && b2 {
-                            cost -= len * 6 / 100;
+                        if cnt6 > 0 && b2 {
+                            cost -= len * 15 / 100;
+                        }
+                        // Deep radix-6 chains following g=7 are slightly cheaper in practice.
+                        if g_new == 7 && cnt6 >= 3 {
+                            cost -= len / 100;
                         }
                         if cost < len_max_cost {
                             (len_max, len_max_cost, g) = (len, cost, g_new);
