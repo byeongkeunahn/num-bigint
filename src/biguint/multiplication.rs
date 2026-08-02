@@ -92,6 +92,7 @@ fn mac3(mut acc: &mut [BigDigit], mut b: &[BigDigit], mut c: &[BigDigit]) {
     // We use four algorithms for different input sizes.
     //
     // - For small inputs, long multiplication is fastest.
+    // - If y is at least least twice as long as x, split using Half-Karatsuba.
     // - Next we use Karatsuba multiplication (Toom-2), which we have optimized
     //   to avoid unnecessary allocations for intermediate values.
     // - Next we use Toom-3, which better optimizes the
