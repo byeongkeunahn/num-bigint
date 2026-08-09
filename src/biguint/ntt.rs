@@ -411,16 +411,15 @@ impl<const P: u64, const INV: bool> NttKernelImpl<P, INV> {
 }
 
 const fn ntt2_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
-    w1: u64,
-    a: u64,
-    mut b: u64,
-) -> (u64, u64) {
+    [w1]: [u64; 1],
+    [a, mut b]: [u64; 2],
+) -> [u64; 2] {
     if !INV && TWIDDLE {
         b = Arith::<P>::mmulmod(w1, b);
     }
     let out0 = Arith::<P>::addmod(a, b);
     let out1 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(w1, Arith::<P>::submod(a, b));
-    (out0, out1)
+    [out0, out1]
 }
 
 fn ntt2_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(px: &mut [u64], w1: u64) {
@@ -428,17 +427,14 @@ fn ntt2_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(px: &mu
     let s1 = px.len() / 2;
     let (a, b) = px.split_at_mut(s1);
     for (a, b) in a.iter_mut().zip(b) {
-        (*a, *b) = ntt2_kernel::<P, INV, TWIDDLE>(w1, *a, *b);
+        [*a, *b] = ntt2_kernel::<P, INV, TWIDDLE>([w1], [*a, *b]);
     }
 }
 
 const fn ntt3_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
-    w1: u64,
-    w2: u64,
-    a: u64,
-    mut b: u64,
-    mut c: u64,
-) -> (u64, u64, u64) {
+    [w1, w2]: [u64; 2],
+    [a, mut b, mut c]: [u64; 3],
+) -> [u64; 3] {
     if !INV && TWIDDLE {
         b = Arith::<P>::mmulmod(w1, b);
         c = Arith::<P>::mmulmod(w2, c);
@@ -453,7 +449,7 @@ const fn ntt3_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
         w2,
         Arith::<P>::submod(Arith::<P>::submod(a, b), kbmc),
     );
-    (out0, out1, out2)
+    [out0, out1, out2]
 }
 
 fn ntt3_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(px: &mut [u64], w1: u64) {
@@ -463,19 +459,14 @@ fn ntt3_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(px: &mu
     let (a, rest) = px.split_at_mut(s1);
     let (b, c) = rest.split_at_mut(s1);
     for ((a, b), c) in a.iter_mut().zip(b).zip(c) {
-        (*a, *b, *c) = ntt3_kernel::<P, INV, TWIDDLE>(w1, w2, *a, *b, *c);
+        [*a, *b, *c] = ntt3_kernel::<P, INV, TWIDDLE>([w1, w2], [*a, *b, *c]);
     }
 }
 
 const fn ntt4_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
-    w1: u64,
-    w2: u64,
-    w3: u64,
-    a: u64,
-    mut b: u64,
-    mut c: u64,
-    mut d: u64,
-) -> (u64, u64, u64, u64) {
+    [w1, w2, w3]: [u64; 3],
+    [a, mut b, mut c, mut d]: [u64; 4],
+) -> [u64; 4] {
     if !INV && TWIDDLE {
         b = Arith::<P>::mmulmod(w1, b);
         c = Arith::<P>::mmulmod(w2, c);
@@ -493,7 +484,7 @@ const fn ntt4_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
     );
     let out2 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(w2, Arith::<P>::submod(apc, bpd));
     let out3 = Arith::<P>::mmulmod_invtw::<INV, TWIDDLE>(w3, Arith::<P>::submod(amc, jbmd));
-    (out0, out1, out2, out3)
+    [out0, out1, out2, out3]
 }
 
 fn ntt4_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(px: &mut [u64], w1: u64) {
@@ -505,22 +496,14 @@ fn ntt4_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(px: &mu
     let (b, rest) = rest.split_at_mut(s1);
     let (c, d) = rest.split_at_mut(s1);
     for (((a, b), c), d) in a.iter_mut().zip(b).zip(c).zip(d) {
-        (*a, *b, *c, *d) = ntt4_kernel::<P, INV, TWIDDLE>(w1, w2, w3, *a, *b, *c, *d);
+        [*a, *b, *c, *d] = ntt4_kernel::<P, INV, TWIDDLE>([w1, w2, w3], [*a, *b, *c, *d]);
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 const fn ntt5_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
-    w1: u64,
-    w2: u64,
-    w3: u64,
-    w4: u64,
-    a: u64,
-    mut b: u64,
-    mut c: u64,
-    mut d: u64,
-    mut e: u64,
-) -> (u64, u64, u64, u64, u64) {
+    [w1, w2, w3, w4]: [u64; 4],
+    [a, mut b, mut c, mut d, mut e]: [u64; 5],
+) -> [u64; 5] {
     if !INV && TWIDDLE {
         b = Arith::<P>::mmulmod(w1, b);
         c = Arith::<P>::mmulmod(w2, c);
@@ -553,7 +536,7 @@ const fn ntt5_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
         w4,
         Arith::<P>::addmodopt_invtw::<INV, TWIDDLE>(s1, m5),
     );
-    (out0, out1, out2, out3, out4)
+    [out0, out1, out2, out3, out4]
 }
 
 fn ntt5_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(px: &mut [u64], w1: u64) {
@@ -567,24 +550,15 @@ fn ntt5_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(px: &mu
     let (c, rest) = rest.split_at_mut(s1);
     let (d, e) = rest.split_at_mut(s1);
     for ((((a, b), c), d), e) in a.iter_mut().zip(b).zip(c).zip(d).zip(e) {
-        (*a, *b, *c, *d, *e) = ntt5_kernel::<P, INV, TWIDDLE>(w1, w2, w3, w4, *a, *b, *c, *d, *e);
+        [*a, *b, *c, *d, *e] =
+            ntt5_kernel::<P, INV, TWIDDLE>([w1, w2, w3, w4], [*a, *b, *c, *d, *e]);
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 const fn ntt6_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
-    w1: u64,
-    w2: u64,
-    w3: u64,
-    w4: u64,
-    w5: u64,
-    mut a: u64,
-    mut b: u64,
-    mut c: u64,
-    mut d: u64,
-    mut e: u64,
-    mut f: u64,
-) -> (u64, u64, u64, u64, u64, u64) {
+    [w1, w2, w3, w4, w5]: [u64; 5],
+    [mut a, mut b, mut c, mut d, mut e, mut f]: [u64; 6],
+) -> [u64; 6] {
     if !INV && TWIDDLE {
         b = Arith::<P>::mmulmod(w1, b);
         c = Arith::<P>::mmulmod(w2, c);
@@ -618,7 +592,7 @@ const fn ntt6_kernel<const P: u64, const INV: bool, const TWIDDLE: bool>(
         w5,
         Arith::<P>::submod(d, Arith::<P>::submod(lepf, e)),
     );
-    (out0, out1, out2, out3, out4, out5)
+    [out0, out1, out2, out3, out4, out5]
 }
 
 fn ntt6_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(px: &mut [u64], w1: u64) {
@@ -634,8 +608,8 @@ fn ntt6_single_block<const P: u64, const INV: bool, const TWIDDLE: bool>(px: &mu
     let (d, rest) = rest.split_at_mut(s1);
     let (e, f) = rest.split_at_mut(s1);
     for (((((a, b), c), d), e), f) in a.iter_mut().zip(b).zip(c).zip(d).zip(e).zip(f) {
-        (*a, *b, *c, *d, *e, *f) =
-            ntt6_kernel::<P, INV, TWIDDLE>(w1, w2, w3, w4, w5, *a, *b, *c, *d, *e, *f);
+        [*a, *b, *c, *d, *e, *f] =
+            ntt6_kernel::<P, INV, TWIDDLE>([w1, w2, w3, w4, w5], [*a, *b, *c, *d, *e, *f]);
     }
 }
 
