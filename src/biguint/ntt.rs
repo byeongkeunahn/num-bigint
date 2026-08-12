@@ -213,123 +213,148 @@ struct NttPlan {
     // The list of tuples (current block size, radix) in DIF (forward) order.
     pub s_list: Vec<(usize, usize)>,
 }
-impl NttPlan {
-    fn build<const P: u64>(min_len: usize) -> Self {
-        assert!(min_len as u64 <= Arith::<P>::MAX_NTT_LEN);
-        let (mut len_max, mut len_max_cost, mut g) = (usize::MAX, usize::MAX, 1);
 
-        for m7 in 0..=1 {
+// Planner costs normally fit in usize. The wide variant keeps comparisons exact
+// for theoretical lengths where multiplying by the unit cost would overflow.
+// Its declaration order also matches its numeric order: every Large value is
+// greater than every Small value.
+#[derive(Clone, Copy, Eq, Ord, PartialEq, PartialOrd)]
+enum PlanCost {
+    Small(usize),
+    Large(u128),
+}
+
+impl PlanCost {
+    fn new(len: usize, unit_cost: usize) -> Self {
+        match len.checked_mul(unit_cost) {
+            Some(cost) => Self::Small(cost),
+            None => Self::Large(len as u128 * unit_cost as u128),
+        }
+    }
+}
+
+impl NttPlan {
+    fn ntt_len_to_radices(mut ntt_len: usize) -> [usize; 5] {
+        let (mut cnt6, mut cnt5, mut cnt4, mut cnt3, mut cnt2) = (0, 0, 0, 0, 0);
+        while ntt_len % 6 == 0 {
+            ntt_len /= 6;
+            cnt6 += 1;
+        }
+        while ntt_len % 5 == 0 {
+            ntt_len /= 5;
+            cnt5 += 1;
+        }
+        while ntt_len % 4 == 0 {
+            ntt_len /= 4;
+            cnt4 += 1;
+        }
+        while ntt_len % 3 == 0 {
+            ntt_len /= 3;
+            cnt3 += 1;
+        }
+        while ntt_len % 2 == 0 {
+            ntt_len /= 2;
+            cnt2 += 1;
+        }
+
+        // Make sure no other factors remain besides 2..=6
+        assert_eq!(ntt_len, 1);
+
+        // radix-3 + radix-4 is cheaper than radix-2 + radix-6
+        let cnt_62_to_43 = cnt6.min(cnt2);
+        cnt6 -= cnt_62_to_43;
+        cnt2 -= cnt_62_to_43;
+        cnt4 += cnt_62_to_43;
+        cnt3 += cnt_62_to_43;
+
+        [cnt2, cnt3, cnt4, cnt5, cnt6]
+    }
+
+    fn build<const P: u64>(min_len: usize) -> Self {
+        if min_len <= 1 {
+            // Special case for short `min_len`.
+            return Self::from_params::<P>(1, 1);
+        }
+
+        // Allowed values for naive multiplication length (base case).
+        const G_MIN: usize = 2;
+        const G_MAX: usize = 9;
+
+        // `G_COSTS` contain the costs for the base case for g = 2..=9.
+        // `RADIX_COSTS` contain the costs for radix-2 to radix-6.
+        const G_COSTS: [usize; G_MAX - G_MIN + 1] = [268, 229, 218, 271, 346, 436, 568, 656];
+        const RADIX_COSTS: [usize; 5] = [504, 785, 754, 1272, 916];
+
+        let max_ntt_len = usize::try_from(Arith::<P>::MAX_NTT_LEN).unwrap_or(usize::MAX);
+        assert!(min_len <= max_ntt_len.saturating_mul(G_MAX));
+
+        let mut best: Option<(usize, usize, PlanCost)> = None;
+
+        for g_new in G_MIN..=G_MAX {
+            let ntt_min_len = min_len / g_new + usize::from(min_len % g_new != 0);
             for m5 in 0..=Arith::<P>::FACTORS_5 {
+                let pow5 = match 5usize.checked_pow(m5) {
+                    Some(pow5) => pow5,
+                    None => break,
+                };
                 for m3 in 0..=Arith::<P>::FACTORS_3 {
-                    let len = 7u64.pow(m7) * 5u64.pow(m5) * 3u64.pow(m3);
-                    if len >= 2 * min_len as u64 {
+                    // Compute the length of the transform
+                    let pow3 = match 3usize.checked_pow(m3) {
+                        Some(pow3) => pow3,
+                        None => break,
+                    };
+                    let mut ntt_len = match pow5.checked_mul(pow3) {
+                        Some(ntt_len) => ntt_len,
+                        None => break,
+                    };
+                    if ntt_len / 2 >= ntt_min_len {
+                        // Too much padding will not be computationally optimal.
                         break;
                     }
-                    let (mut len, mut m2) = (len as usize, 0);
-                    while len < min_len && m2 < Arith::<P>::FACTORS_2 {
-                        len *= 2;
+                    let mut m2 = 0;
+                    while ntt_len < ntt_min_len && m2 < Arith::<P>::FACTORS_2 {
+                        ntt_len = match ntt_len.checked_mul(2) {
+                            Some(ntt_len) => ntt_len,
+                            None => break,
+                        };
                         m2 += 1;
                     }
-                    if len >= min_len && len < len_max_cost {
-                        let (mut tmp, mut cost) = (len, 0);
-                        let mut g_new = 1;
+                    if ntt_len < ntt_min_len {
+                        continue;
+                    }
+                    let len = match g_new.checked_mul(ntt_len) {
+                        Some(len) => len,
+                        None => continue,
+                    };
 
-                        // Length-dependent weights for cost estimation.
-                        let small_transform = len <= 1 << 20;
-                        let g7_weight = if small_transform { 1113 } else { 1150 };
-                        let radix6_weight = if small_transform { 110 } else { 115 };
-                        let radix5_weight =
-                            156 + 30 * len.saturating_sub(5 << 14).min(1 << 16) / (1 << 16);
-                        let radix4_weight = if small_transform { 90 } else { 100 };
-                        let radix3_weight = 100;
-                        let radix2_weight = if small_transform { 85 } else { 100 };
+                    // Compute the cost of the transform.
+                    let radix_counts = Self::ntt_len_to_radices(ntt_len);
+                    let unit_cost = G_COSTS[g_new - G_MIN]
+                        + radix_counts
+                            .into_iter()
+                            .zip(RADIX_COSTS)
+                            .map(|(radix_count, radix_cost)| radix_count * radix_cost)
+                            .sum::<usize>();
+                    let cost = PlanCost::new(len, unit_cost);
 
-                        if len % 7 == 0 {
-                            (g_new, tmp, cost) = (7, tmp / 7, cost + len * g7_weight / 1000);
-                        } else if len % 5 == 0 {
-                            (g_new, tmp, cost) = (5, tmp / 5, cost + len * 89 / 100);
-                        } else if m3 >= m2 + 2 {
-                            (g_new, tmp, cost) = (9, tmp / 9, cost + len * 180 / 100);
-                        } else if m2 >= m3 + 3 && (m2 - m3) % 2 == 1 {
-                            (g_new, tmp, cost) = (8, tmp / 8, cost + len * 130 / 100);
-                        } else if m2 >= m3 + 2 && m3 == 0 {
-                            (g_new, tmp, cost) = (4, tmp / 4, cost + len * 87 / 100);
-                        } else if m2 == 0 && m3 >= 1 {
-                            (g_new, tmp, cost) = (3, tmp / 3, cost + len * 86 / 100);
-                        } else if m3 == 0 && m2 >= 1 {
-                            (g_new, tmp, cost) = (2, tmp / 2, cost + len * 86 / 100);
-                        } else if len % 6 == 0 {
-                            (g_new, tmp, cost) = (6, tmp / 6, cost + len * 91 / 100);
-                        }
-                        let (mut b6, mut b2) = (false, false);
-                        while tmp % 6 == 0 {
-                            (tmp, cost) = (tmp / 6, cost + len * radix6_weight / 100);
-                            b6 = true;
-                        }
-                        while tmp % 5 == 0 {
-                            (tmp, cost) = (tmp / 5, cost + len * radix5_weight / 100);
-                        }
-                        while tmp % 4 == 0 {
-                            (tmp, cost) = (tmp / 4, cost + len * radix4_weight / 100);
-                        }
-                        while tmp % 3 == 0 {
-                            (tmp, cost) = (tmp / 3, cost + len * radix3_weight / 100);
-                        }
-                        while tmp % 2 == 0 {
-                            (tmp, cost) = (tmp / 2, cost + len * radix2_weight / 100);
-                            b2 = true;
-                        }
-                        if b6 && b2 {
-                            // One radix-6 stage and the remaining radix-2 stage are
-                            // executed as radix-4 and radix-3 stages.
-                            cost -= len * radix6_weight / 100;
-                            cost -= len * radix2_weight / 100;
-                            cost += len * radix4_weight / 100;
-                            cost += len * radix3_weight / 100;
-                        }
-
-                        // Account for work that scales with transform length but is
-                        // independent of the chosen stage decomposition.
-                        cost += len * 4 / 100;
-
-                        if cost < len_max_cost {
-                            (len_max, len_max_cost, g) = (len, cost, g_new);
-                        }
+                    // Record the transform with minimum cost
+                    if best.map_or(true, |(_, _, best_cost)| cost < best_cost) {
+                        best = Some((len, g_new, cost));
                     }
                 }
             }
         }
-        let (mut cnt6, mut cnt5, mut cnt4, mut cnt3, mut cnt2) = (0, 0, 0, 0, 0);
-        let mut tmp = len_max / g;
-        while tmp % 6 == 0 {
-            tmp /= 6;
-            cnt6 += 1;
-        }
-        while tmp % 5 == 0 {
-            tmp /= 5;
-            cnt5 += 1;
-        }
-        while tmp % 4 == 0 {
-            tmp /= 4;
-            cnt4 += 1;
-        }
-        while tmp % 3 == 0 {
-            tmp /= 3;
-            cnt3 += 1;
-        }
-        while tmp % 2 == 0 {
-            tmp /= 2;
-            cnt2 += 1;
-        }
-        while cnt6 > 0 && cnt2 > 0 {
-            cnt6 -= 1;
-            cnt2 -= 1;
-            cnt4 += 1;
-            cnt3 += 1;
-        }
+        let (best_len, best_g, _) = best.expect("NTT length is too large");
+        Self::from_params::<P>(best_len, best_g)
+    }
+
+    fn from_params<const P: u64>(len: usize, g: usize) -> Self {
+        assert!(len % g == 0);
+        let ntt_len = len / g;
+        let [cnt2, cnt3, cnt4, cnt5, cnt6] = Self::ntt_len_to_radices(ntt_len);
         let s_list = {
             let mut out = vec![];
-            let mut tmp = len_max;
+            let mut tmp = len;
             for _ in 0..cnt2 {
                 out.push((tmp, 2));
                 tmp /= 2;
@@ -353,9 +378,9 @@ impl NttPlan {
             out
         };
         Self {
-            n: len_max,
+            n: len,
             g,
-            m: len_max / g,
+            m: ntt_len,
             last_radix: s_list.last().unwrap_or(&(1, 1)).1,
             s_list,
         }
