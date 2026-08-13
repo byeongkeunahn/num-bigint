@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 
 mod arith {
-    // Extended Euclid algorithm:
+    // Extended Euclidean algorithm:
     //   (g, x, y) is a solution to ax + by = g, where g = gcd(a, b)
     const fn egcd(mut a: i128, mut b: i128) -> (i128, i128, i128) {
         assert!(a > 0 && b > 0);
@@ -147,7 +147,7 @@ impl<const P: u64> Arith<P> {
 
     // Computes c as u128 * mreduce(v) as u128, using d: u64 = mmulmod(P-1, c).
     //
-    // It is caller's responsibility to ensure that d is correct.
+    // It is the caller's responsibility to ensure that d is correct.
     // Note that d can be computed by calling mreducelo(c).
     const fn mmulmod_noreduce(v: u128, c: u64, d: u64) -> u128 {
         let a: u128 = c as u128 * (v >> 64);
@@ -202,13 +202,13 @@ impl<const P: u64> Arith<P> {
 }
 
 struct NttPlan {
-    // The whole length of convolution, which equals g*m.
+    // The total convolution length, which equals g*m.
     pub n: usize,
     // The length of each base case handled by naive multiplication.
     pub g: usize,
     // The product of radices processed by NTT. Should divide `Arith::<P>::MAX_NTT_LEN`.
     pub m: usize,
-    // The NTT radix scheduled most adjacently to the naive multiplication.
+    // The NTT radix scheduled closest to the naive multiplication.
     pub last_radix: usize,
     // The list of tuples (current block size, radix) in DIF (forward) order.
     pub s_list: Vec<(usize, usize)>,
@@ -260,7 +260,7 @@ impl NttPlan {
         // radix-5 can never mix with other radices.
         let cnt5 = m5;
 
-        // Pick radix-6 and radix-4 greedily and put remainders to radix-2 and radix-3.
+        // Pick radix-6 and radix-4 greedily and assign the remaining factors to radix-2 and radix-3.
         let mut cnt6 = m2.min(m3);
         m2 -= cnt6;
         m3 -= cnt6;
@@ -283,17 +283,17 @@ impl NttPlan {
         const G_MIN: usize = 4;
         const G_MAX: usize = 9;
 
-        // We do not need NTT for short cases.
+        // Short cases do not require an NTT.
         // The threshold could be larger, but we keep it minimal for simplicity.
-        // (NTT will not be invoked for short cases anyway)
+        // (Short cases will not invoke the NTT anyway.)
         if min_len <= G_MAX {
             // Special case for short `min_len`.
             let g = min_len.max(1);
             return Self::from_params::<P>(g, g);
         }
 
-        // `G_COSTS` contain the costs for the base case for g = G_MIN..=G_MAX.
-        // `RADIX_COSTS` contain the costs for radix-2 to radix-6.
+        // `G_COSTS` contains the costs for the base case for g = G_MIN..=G_MAX.
+        // `RADIX_COSTS` contains the costs for radix-2 to radix-6.
         const G_COSTS: [u32; G_MAX - G_MIN + 1] = [218, 271, 346, 436, 568, 656];
         const RADIX_COSTS: [u32; 5] = [504, 785, 754, 1272, 916];
 
@@ -301,9 +301,8 @@ impl NttPlan {
         assert!(min_len <= max_ntt_len.saturating_mul(G_MAX));
 
         let mut best: Option<(usize, usize, PlanCost)> = None;
-
-        for g_new in G_MIN..=G_MAX {
-            let ntt_min_len = min_len / g_new + usize::from(min_len % g_new != 0);
+        for g in G_MIN..=G_MAX {
+            let ntt_min_len = min_len / g + usize::from(min_len % g != 0);
             for m5 in 0..=Arith::<P>::FACTORS_5 {
                 let pow5 = match 5usize.checked_pow(m5) {
                     Some(pow5) => pow5,
@@ -334,14 +333,14 @@ impl NttPlan {
                     if ntt_len < ntt_min_len {
                         continue;
                     }
-                    let len = match g_new.checked_mul(ntt_len) {
+                    let len = match g.checked_mul(ntt_len) {
                         Some(len) => len,
                         None => continue,
                     };
 
                     // Compute the cost of the transform.
                     let radix_counts = Self::ntt_len_factors_to_radices(m2, m3, m5);
-                    let unit_cost = G_COSTS[g_new - G_MIN]
+                    let unit_cost = G_COSTS[g - G_MIN]
                         + radix_counts
                             .into_iter()
                             .zip(RADIX_COSTS)
@@ -349,9 +348,9 @@ impl NttPlan {
                             .sum::<u32>();
                     let cost = PlanCost::new(len, unit_cost);
 
-                    // Record the transform with minimum cost
+                    // Record the transform with the minimum cost
                     if best.map_or(true, |(_, _, best_cost)| cost < best_cost) {
-                        best = Some((len, g_new, cost));
+                        best = Some((len, g, cost));
                     }
                 }
             }
@@ -739,7 +738,7 @@ fn calc_twiddle_factors<const P: u64, const INV: bool>(
 }
 
 // Performs (cyclic) integer convolution modulo P using NTT.
-// Modifies the input buffers in-place.
+// Modifies the input buffers in place.
 // The output is saved in the slice `x`.
 // The input slices must have the same length.
 fn conv<const P: u64>(
@@ -944,7 +943,7 @@ fn mac3_two_primes(acc: &mut [u64], b: &[u64], c: &[u64], bits: u64) {
             acc[j] = w;
             carry_acc = u64::from(overflow1 || overflow2);
 
-            // roll-over
+            // roll over
             (j, p) = (j + 1, p - 64);
             bitbuf = out >> (bits - p);
         }
