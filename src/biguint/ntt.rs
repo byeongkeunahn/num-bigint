@@ -225,40 +225,48 @@ enum PlanCost {
 }
 
 impl PlanCost {
-    fn new(len: usize, unit_cost: usize) -> Self {
-        match len.checked_mul(unit_cost) {
-            Some(cost) => Self::Small(cost),
-            None => Self::Large(len as u128 * unit_cost as u128),
+    fn new(len: usize, unit_cost: u32) -> Self {
+        if let Ok(unit_cost_usize) = usize::try_from(unit_cost) {
+            if let Some(cost) = len.checked_mul(unit_cost_usize) {
+                return Self::Small(cost);
+            }
         }
+        Self::Large(len as u128 * unit_cost as u128)
     }
 }
 
 impl NttPlan {
-    fn ntt_len_to_radices(mut ntt_len: usize) -> [usize; 5] {
-        let (mut cnt6, mut cnt5, mut cnt4, mut cnt3, mut cnt2) = (0, 0, 0, 0, 0);
-        while ntt_len % 6 == 0 {
-            ntt_len /= 6;
-            cnt6 += 1;
-        }
-        while ntt_len % 5 == 0 {
-            ntt_len /= 5;
-            cnt5 += 1;
-        }
-        while ntt_len % 4 == 0 {
-            ntt_len /= 4;
-            cnt4 += 1;
-        }
+    fn ntt_len_to_radices(mut ntt_len: usize) -> [u32; 5] {
+        let m2 = ntt_len.trailing_zeros();
+        ntt_len >>= m2;
+        let mut m3 = 0;
         while ntt_len % 3 == 0 {
             ntt_len /= 3;
-            cnt3 += 1;
+            m3 += 1;
         }
-        while ntt_len % 2 == 0 {
-            ntt_len /= 2;
-            cnt2 += 1;
+        let mut m5 = 0;
+        while ntt_len % 5 == 0 {
+            ntt_len /= 5;
+            m5 += 1;
         }
 
         // Make sure no other factors remain besides 2..=6
         assert_eq!(ntt_len, 1);
+
+        Self::ntt_len_factors_to_radices(m2, m3, m5)
+    }
+
+    fn ntt_len_factors_to_radices(mut m2: u32, mut m3: u32, m5: u32) -> [u32; 5] {
+        // radix-5 can never mix with other radices.
+        let cnt5 = m5;
+
+        // Pick radix-6 and radix-4 greedily and put remainders to radix-2 and radix-3.
+        let mut cnt6 = m2.min(m3);
+        m2 -= cnt6;
+        m3 -= cnt6;
+        let mut cnt4 = m2 / 2;
+        m2 -= cnt4 * 2;
+        let [mut cnt2, mut cnt3] = [m2, m3];
 
         // radix-3 + radix-4 is cheaper than radix-2 + radix-6
         let cnt_62_to_43 = cnt6.min(cnt2);
@@ -271,19 +279,23 @@ impl NttPlan {
     }
 
     fn build<const P: u64>(min_len: usize) -> Self {
-        if min_len <= 1 {
-            // Special case for short `min_len`.
-            return Self::from_params::<P>(1, 1);
-        }
-
-        // Allowed values for naive multiplication length (base case).
-        const G_MIN: usize = 2;
+        // Allowed values for naive multiplication chunk length (base case).
+        const G_MIN: usize = 4;
         const G_MAX: usize = 9;
 
-        // `G_COSTS` contain the costs for the base case for g = 2..=9.
+        // We do not need NTT for short cases.
+        // The threshold could be larger, but we keep it minimal for simplicity.
+        // (NTT will not be invoked for short cases anyway)
+        if min_len <= G_MAX {
+            // Special case for short `min_len`.
+            let g = min_len.max(1);
+            return Self::from_params::<P>(g, g);
+        }
+
+        // `G_COSTS` contain the costs for the base case for g = G_MIN..=G_MAX.
         // `RADIX_COSTS` contain the costs for radix-2 to radix-6.
-        const G_COSTS: [usize; G_MAX - G_MIN + 1] = [268, 229, 218, 271, 346, 436, 568, 656];
-        const RADIX_COSTS: [usize; 5] = [504, 785, 754, 1272, 916];
+        const G_COSTS: [u32; G_MAX - G_MIN + 1] = [218, 271, 346, 436, 568, 656];
+        const RADIX_COSTS: [u32; 5] = [504, 785, 754, 1272, 916];
 
         let max_ntt_len = usize::try_from(Arith::<P>::MAX_NTT_LEN).unwrap_or(usize::MAX);
         assert!(min_len <= max_ntt_len.saturating_mul(G_MAX));
@@ -328,13 +340,13 @@ impl NttPlan {
                     };
 
                     // Compute the cost of the transform.
-                    let radix_counts = Self::ntt_len_to_radices(ntt_len);
+                    let radix_counts = Self::ntt_len_factors_to_radices(m2, m3, m5);
                     let unit_cost = G_COSTS[g_new - G_MIN]
                         + radix_counts
                             .into_iter()
                             .zip(RADIX_COSTS)
                             .map(|(radix_count, radix_cost)| radix_count * radix_cost)
-                            .sum::<usize>();
+                            .sum::<u32>();
                     let cost = PlanCost::new(len, unit_cost);
 
                     // Record the transform with minimum cost
