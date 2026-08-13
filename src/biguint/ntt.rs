@@ -365,7 +365,8 @@ impl NttPlan {
         let ntt_len = len / g;
         let [cnt2, cnt3, cnt4, cnt5, cnt6] = Self::ntt_len_to_radices(ntt_len);
         let s_list = {
-            let mut out = vec![];
+            let capacity = (cnt2 + cnt3 + cnt4 + cnt5 + cnt6) as usize;
+            let mut out = Vec::with_capacity(capacity);
             let mut tmp = len;
             for _ in 0..cnt2 {
                 out.push((tmp, 2));
